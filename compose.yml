@@ -1,0 +1,47 @@
+services:
+  takaweb:
+    image: "ghcr.io/danfq/takaweb:latest"
+    restart: "unless-stopped"
+    depends_on:
+      mongo:
+        condition: "service_healthy"
+    environment:
+      MONGO_URI: "mongodb://${MONGO_USERNAME:-takatime}:${MONGO_PASSWORD:?set MONGO_PASSWORD}@mongo:27017/?authSource=admin"
+      BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}"
+      TAKAWEB_URL: "${TAKAWEB_URL:-http://localhost:4321}"
+      TAKAWEB_ALLOWED_EMAILS: "${TAKAWEB_ALLOWED_EMAILS:-}"
+      GITHUB_CLIENT_ID: "${GITHUB_CLIENT_ID:-}"
+      GITHUB_CLIENT_SECRET: "${GITHUB_CLIENT_SECRET:-}"
+      GITLAB_CLIENT_ID: "${GITLAB_CLIENT_ID:-}"
+      GITLAB_CLIENT_SECRET: "${GITLAB_CLIENT_SECRET:-}"
+      GITLAB_ISSUER: "${GITLAB_ISSUER:-https://gitlab.com}"
+    ports:
+      - "${TAKAWEB_BIND:-127.0.0.1}:${TAKAWEB_PORT:-4321}:4321"
+    volumes:
+      - "takaweb-data:/data"
+    healthcheck:
+      test: ["CMD", "node", "/app/scripts/healthcheck.mjs"]
+      interval: "30s"
+      timeout: "5s"
+      retries: 3
+
+  mongo:
+    image: "mongo:8"
+    restart: "unless-stopped"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "${MONGO_USERNAME:-takatime}"
+      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_PASSWORD:?set MONGO_PASSWORD}"
+    ports:
+      - "${MONGO_BIND:-127.0.0.1}:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - "mongo-data:/data/db"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: "10s"
+      timeout: "5s"
+      retries: 5
+      start_period: "20s"
+
+volumes:
+  takaweb-data:
+  mongo-data:
