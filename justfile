@@ -19,7 +19,6 @@ env:
     fi
     sed \
         -e "s|^MONGO_PASSWORD=.*|MONGO_PASSWORD=$(openssl rand -hex 24)|" \
-        -e "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=$(openssl rand -base64 32)|" \
         -e "s|^TAKAWEB_URL=.*|TAKAWEB_URL=$(portless get takaweb)|" \
         .env.example > .env
     echo "created .env"
