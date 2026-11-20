@@ -1,0 +1,28 @@
+---
+import "@/styles/global.css";
+import { ThemeScript } from "@danfq/theme-toggle";
+import Header from "@/components/layout/header.astro";
+---
+
+<html lang="en">
+  <head>
+    {/* meta */}
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+
+    {/* theme */}
+    <ThemeScript />
+
+    {/* icons & fonts */}
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+
+    {/* title */}
+    <title>Astro</title>
+  </head>
+  <body>
+    <Header />
+    <slot />
+  </body>
+</html>
