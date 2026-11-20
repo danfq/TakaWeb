@@ -1,5 +1,8 @@
 ---
 import { ThemeToggle } from "@danfq/theme-toggle/react";
+import LogoutButton from "@/components/auth/logout-button";
+
+const { user } = Astro.locals;
 ---
 
 <header class="flex flex-row items-center justify-between p-6">
@@ -9,5 +12,8 @@ import { ThemeToggle } from "@danfq/theme-toggle/react";
   </h1>
 
   {/* actions & theme */}
-  <ThemeToggle client:load />
+  <div class="flex flex-row items-center gap-2">
+    {user && <LogoutButton client:load />}
+    <ThemeToggle client:load />
+  </div>
 </header>

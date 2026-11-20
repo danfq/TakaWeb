@@ -1,0 +1,10 @@
+---
+import MainLayout from "@/layouts/main.astro";
+import SetupForm from "@/components/auth/setup-form";
+---
+
+<MainLayout title="Setup">
+  <main class="flex flex-1 items-center justify-center p-6">
+    <SetupForm client:load />
+  </main>
+</MainLayout>

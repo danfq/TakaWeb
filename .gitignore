@@ -1,5 +1,9 @@
 # build output
 dist/
+
+# embedded database
+data/
+
 # generated types
 .astro/
 
