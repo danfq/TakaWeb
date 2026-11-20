@@ -2,6 +2,12 @@
 import "@/styles/global.css";
 import { ThemeScript } from "@danfq/theme-toggle";
 import Header from "@/components/layout/header.astro";
+
+interface Props {
+  title?: string;
+}
+
+const { title } = Astro.props;
 ---
 
 <html lang="en">
@@ -19,9 +25,9 @@ import Header from "@/components/layout/header.astro";
     <link rel="icon" href="/favicon.ico" />
 
     {/* title */}
-    <title>Astro</title>
+    <title>{title ? `${title} · TakaWeb` : "TakaWeb"}</title>
   </head>
-  <body>
+  <body class="flex min-h-svh flex-col">
     <Header />
     <slot />
   </body>
