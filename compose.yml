@@ -5,8 +5,10 @@ services:
     depends_on:
       mongo:
         condition: "service_healthy"
+      mongo-init:
+        condition: "service_completed_successfully"
     environment:
-      MONGO_URI: "mongodb://${MONGO_USERNAME:-takatime}:${MONGO_PASSWORD:?set MONGO_PASSWORD}@mongo:27017/?authSource=admin"
+      MONGO_URI: "mongodb://${MONGO_READONLY_USERNAME:-takaweb}:${MONGO_READONLY_PASSWORD:?set MONGO_READONLY_PASSWORD}@mongo:27017/takatime?authSource=admin"
       TAKAWEB_URL: "${TAKAWEB_URL:-http://localhost:4321}"
       TAKAWEB_DATA_DIR: "/data"
     ports:
@@ -35,6 +37,54 @@ services:
       timeout: "5s"
       retries: 5
       start_period: "20s"
+
+  mongo-init:
+    image: "mongo:8"
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: "service_healthy"
+    environment:
+      MONGO_USERNAME: "${MONGO_USERNAME:-takatime}"
+      MONGO_PASSWORD: "${MONGO_PASSWORD:?set MONGO_PASSWORD}"
+      MONGO_READONLY_USERNAME: "${MONGO_READONLY_USERNAME:-takaweb}"
+      MONGO_READONLY_PASSWORD: "${MONGO_READONLY_PASSWORD:?set MONGO_READONLY_PASSWORD}"
+    configs:
+      - source: "mongo-readonly-user"
+        target: "/mongo-readonly-user.js"
+    command: ["mongosh", "--nodb", "--quiet", "/mongo-readonly-user.js"]
+
+configs:
+  mongo-readonly-user:
+    content: |
+      // create or sync the read-only user takaweb connects with, safe to run on every start
+      const env = process.env;
+      const user = env.MONGO_READONLY_USERNAME;
+
+      // never touch the root user, updating it would strip its roles
+      if (!user || user === env.MONGO_USERNAME) {
+        throw new Error("MONGO_READONLY_USERNAME must be set and differ from MONGO_USERNAME");
+      }
+
+      const admin = connect(
+        "mongodb://" +
+          encodeURIComponent(env.MONGO_USERNAME) + ":" +
+          encodeURIComponent(env.MONGO_PASSWORD) +
+          "@mongo:27017/admin?authSource=admin",
+      );
+
+      const options = {
+        pwd: env.MONGO_READONLY_PASSWORD,
+        roles: [{ role: "read", db: "takatime" }],
+      };
+
+      if (admin.getUser(user)) {
+        admin.updateUser(user, options);
+        print("updated read-only user " + user);
+      } else {
+        admin.createUser({ user: user, ...options });
+        print("created read-only user " + user);
+      }
 
 volumes:
   takaweb-db:
