@@ -12,7 +12,7 @@ services:
     ports:
       - "${TAKAWEB_BIND:-127.0.0.1}:${TAKAWEB_PORT:-4321}:4321"
     volumes:
-      - "takaweb-data:/data"
+      - "takaweb-db:/data"
     healthcheck:
       test: ["CMD", "node", "/app/scripts/healthcheck.mjs"]
       interval: "30s"
@@ -37,5 +37,5 @@ services:
       start_period: "20s"
 
 volumes:
-  takaweb-data:
+  takaweb-db:
   mongo-data:
