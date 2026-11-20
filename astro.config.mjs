@@ -5,11 +5,13 @@ import tailwindcss from "@tailwindcss/vite";
 
 import node from "@astrojs/node";
 
+import boot from "./src/integrations/boot";
+
 // https://astro.build/config
 export default defineConfig({
   output: "server",
 
-  integrations: [react()],
+  integrations: [react(), boot()],
 
   vite: {
     plugins: [tailwindcss()],

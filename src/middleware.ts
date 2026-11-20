@@ -7,6 +7,7 @@ import {
   validateSession,
 } from "@/lib/server/auth/session";
 
+// no-op once the boot integration ran, kept as a fallback
 bootstrap();
 
 export const onRequest = defineMiddleware((context, next) => {
