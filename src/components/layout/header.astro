@@ -1,0 +1,13 @@
+---
+import { ThemeToggle } from "@danfq/theme-toggle/react";
+---
+
+<header class="flex flex-row items-center justify-between p-6">
+  {/* title */}
+  <h1 class="text-xl">
+    Taka<span class="text-[#38afa5] tracking-wide">Web</span>
+  </h1>
+
+  {/* actions & theme */}
+  <ThemeToggle client:load />
+</header>
