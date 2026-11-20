@@ -19,13 +19,15 @@ env:
     fi
     sed \
         -e "s|^MONGO_PASSWORD=.*|MONGO_PASSWORD=$(openssl rand -hex 24)|" \
+        -e "s|^MONGO_READONLY_PASSWORD=.*|MONGO_READONLY_PASSWORD=$(openssl rand -hex 24)|" \
         -e "s|^TAKAWEB_URL=.*|TAKAWEB_URL=$(portless get takaweb)|" \
         .env.example > .env
     echo "created .env"
 
-# start backing services (mongo) and wait until healthy
+# start backing services (mongo), wait until healthy and sync the read-only user
 up: env
     docker compose up -d --wait mongo
+    docker compose run --rm mongo-init
 
 # stop the compose stack
 down:
@@ -49,8 +51,8 @@ dev: up
     set -euo pipefail
     # reload .env in case it was just created by up
     set -a; source .env; set +a
-    # point the dev server at the published mongo instead of the compose network
-    export MONGO_URI="mongodb://${MONGO_USERNAME:-takatime}:${MONGO_PASSWORD}@127.0.0.1:${MONGO_PORT:-27017}/?authSource=admin"
+    # point the dev server at the published mongo as the read-only user
+    export MONGO_URI="mongodb://${MONGO_READONLY_USERNAME:-takaweb}:${MONGO_READONLY_PASSWORD}@127.0.0.1:${MONGO_PORT:-27017}/takatime?authSource=admin"
     exec bun run dev
 
 # build for production
