@@ -11,9 +11,9 @@
     "node": ">=22.23.4"
   },
   "scripts": {
-    "dev": "astro dev",
+    "dev": "portless takaweb astro dev",
     "build": "astro build",
-    "preview": "astro preview",
+    "preview": "portless takaweb astro preview",
     "astro": "astro"
   },
   "dependencies": {
