@@ -9,6 +9,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { keyboardMode } from "@/lib/focus";
 
 /**
  * whether the browser runs on an apple platform, where shortcuts use cmd
@@ -49,6 +50,8 @@ export default function SettingsSheet() {
 
       if (modifier && !event.altKey && !event.shiftKey && event.key === ",") {
         event.preventDefault();
+        // opened by keyboard, so focus inside the sheet should show
+        keyboardMode();
         setOpen(true);
       }
     };

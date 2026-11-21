@@ -158,9 +158,10 @@
 
 /*
  * keyboard navigation gets a focus outline, set by the focus script in the main layout
+ * any focus counts here, browsers skip :focus-visible after shortcuts like cmd+,
  * unlayered so component utilities such as outline-none cannot hide it
  */
-[data-focus="keyboard"] :focus-visible {
+[data-focus="keyboard"] :focus {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
 }
