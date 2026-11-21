@@ -101,6 +101,60 @@ type SessionsProps = {
 };
 
 /**
+ * sessions grouped under their local start day, with a total per day
+ */
+export function SessionDays({
+  sessions,
+  colors,
+  liveSince,
+  now,
+  headingClassName = "bg-card",
+}: {
+  sessions: Session[];
+  colors: Map<string, string>;
+  // sessions ending after this are still going
+  liveSince: number;
+  now: number;
+  // sticky headings need the background they scroll over
+  headingClassName?: string;
+}) {
+  const { locale, tz } = useLocale();
+  const days = new Map<string, Session[]>();
+
+  for (const session of sessions) {
+    const name = dayName(session.start, now, locale, tz);
+    days.set(name, [...(days.get(name) ?? []), session]);
+  }
+
+  return [...days].map(([name, list]) => (
+    <div key={name}>
+      <h3
+        className={cn(
+          "sticky top-0 z-10 py-1.5 text-xs font-medium text-muted-foreground",
+          headingClassName,
+        )}
+      >
+        {name}
+        <span className="ml-2 font-normal tabular-nums">
+          {duration(list.reduce((sum, session) => sum + session.seconds, 0))}
+        </span>
+      </h3>
+
+      <ul className="mb-2 @container">
+        {list.map((session) => (
+          <SessionRow
+            key={`${session.project}-${session.start}`}
+            session={session}
+            color={colors.get(session.project)}
+            live={session.end >= liveSince}
+          />
+        ))}
+      </ul>
+    </div>
+  ));
+}
+
+/**
  * recent stretches of work, newest first, grouped by day
  */
 export default function Sessions({
@@ -111,14 +165,6 @@ export default function Sessions({
   now,
   className,
 }: SessionsProps) {
-  const { locale, tz } = useLocale();
-  const days = new Map<string, Session[]>();
-
-  for (const session of sessions) {
-    const name = dayName(session.start, now, locale, tz);
-    days.set(name, [...(days.get(name) ?? []), session]);
-  }
-
   return (
     <Section
       title="Sessions"
@@ -136,29 +182,12 @@ export default function Sessions({
           </p>
         )}
 
-        {[...days].map(([name, list]) => (
-          <div key={name}>
-            <h3 className="sticky top-0 z-10 bg-card py-1.5 text-xs font-medium text-muted-foreground">
-              {name}
-              <span className="ml-2 font-normal tabular-nums">
-                {duration(
-                  list.reduce((sum, session) => sum + session.seconds, 0),
-                )}
-              </span>
-            </h3>
-
-            <ul className="mb-2 @container">
-              {list.map((session) => (
-                <SessionRow
-                  key={`${session.project}-${session.start}`}
-                  session={session}
-                  color={colors.get(session.project)}
-                  live={session.end >= liveSince}
-                />
-              ))}
-            </ul>
-          </div>
-        ))}
+        <SessionDays
+          sessions={sessions}
+          colors={colors}
+          liveSince={liveSince}
+          now={now}
+        />
       </SectionBody>
     </Section>
   );

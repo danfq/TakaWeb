@@ -4,7 +4,7 @@ import { DayParts } from "@/components/dashboard/activity";
 import BarChart from "@/components/dashboard/bar-chart";
 import { useLocale } from "@/components/dashboard/locale";
 import Ranking, { rankColor } from "@/components/dashboard/ranking";
-import { SessionRow } from "@/components/dashboard/sessions";
+import { SessionDays, SessionRow } from "@/components/dashboard/sessions";
 import { useDetail } from "@/components/dashboard/use-detail";
 import { Button } from "@/components/ui/button";
 import {
@@ -394,16 +394,27 @@ function Insights({
           `Latest ${detail.sessions.length} of ${detail.sessionCount}`
         }
       >
-        <ul className="@container">
-          {detail.sessions.map((session) => (
-            <SessionRow
-              key={`${session.project}-${session.start}`}
-              session={session}
-              color={colors.get(session.project)}
-              live={session.end >= now - LIVE_WINDOW}
-            />
-          ))}
-        </ul>
+        {single ? (
+          <ul className="@container">
+            {detail.sessions.map((session) => (
+              <SessionRow
+                key={`${session.project}-${session.start}`}
+                session={session}
+                color={colors.get(session.project)}
+                live={session.end >= now - LIVE_WINDOW}
+              />
+            ))}
+          </ul>
+        ) : (
+          // several days, so each session sits under its start day
+          <SessionDays
+            sessions={detail.sessions}
+            colors={colors}
+            liveSince={now - LIVE_WINDOW}
+            now={now}
+            headingClassName="bg-popover"
+          />
+        )}
       </Block>
     </div>
   );
