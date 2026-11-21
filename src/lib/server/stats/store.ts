@@ -64,6 +64,8 @@ const PROJECTION = {
 type State = {
   data: Data;
   loaded: boolean;
+  // logs kept from before an idle stop, not trusted until caught up
+  catchingUp: boolean;
   status: Status;
   holders: number;
   // bumped on every stop, stale loops compare against it and bail
@@ -98,6 +100,7 @@ globals.__takawebStore?.dispose?.();
 const state: State = (globals.__takawebStore = {
   data: empty(),
   loaded: false,
+  catchingUp: false,
   status: hasMongo() ? { state: "connecting" } : { state: "unconfigured" },
   holders: 0,
   epoch: 0,
@@ -377,6 +380,16 @@ async function stream(epoch: number) {
 }
 
 /**
+ * trust kept logs again once a restart caught up, or failed to
+ */
+function settle() {
+  if (!state.catchingUp) return;
+
+  state.catchingUp = false;
+  for (const listener of state.listeners) listener();
+}
+
+/**
  * load the logs and start watching for changes
  *
  * @param epoch watcher epoch
@@ -386,8 +399,11 @@ async function start(epoch: number) {
 
   try {
     await sync(!state.loaded);
+    settle();
     void stream(epoch);
   } catch (error) {
+    // the last known logs beat nothing while the database is unreachable
+    settle();
     fail(epoch, error);
   }
 }
@@ -428,6 +444,7 @@ export function retain(): () => void {
 
   if (!state.running) {
     state.running = true;
+    state.catchingUp = state.loaded;
     if (state.status.state !== "ready") setStatus({ state: "connecting" });
     void start(state.epoch);
   }
@@ -481,7 +498,7 @@ export function entries(): readonly Entry[] {
  */
 export function whenReady(timeout: number): Promise<void> {
   const settled = () =>
-    state.loaded || ["error", "unconfigured"].includes(state.status.state);
+    isLoaded() || ["error", "unconfigured"].includes(state.status.state);
 
   if (settled()) return Promise.resolve();
 
@@ -502,7 +519,7 @@ export function whenReady(timeout: number): Promise<void> {
  *
  * @returns {boolean} loaded
  */
-export const isLoaded = (): boolean => state.loaded;
+export const isLoaded = (): boolean => state.loaded && !state.catchingUp;
 
 /**
  * current data source status
