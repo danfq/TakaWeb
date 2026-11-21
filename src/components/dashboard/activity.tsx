@@ -14,7 +14,22 @@ import Calendar from "@/components/dashboard/calendar";
 import { SectionBody, TabbedSection } from "@/components/dashboard/section";
 import { change, day, duration } from "@/lib/stats/format";
 import { useLocale } from "@/components/dashboard/locale";
-import type { Bucket, Period, Range, Snapshot } from "@/lib/stats/types";
+import { dayPeriod, monthPeriod, samePeriod } from "@/lib/stats/period";
+import type {
+  Bucket,
+  Period,
+  PeriodRange,
+  Range,
+  Snapshot,
+} from "@/lib/stats/types";
+
+/**
+ * the period whose details are open, and a way to open another
+ */
+type Selection = {
+  selected: PeriodRange | null;
+  onOpen: (period: PeriodRange) => void;
+};
 
 type Unit = Period["activity"]["unit"];
 
@@ -156,7 +171,9 @@ function Timeline({
   period,
   range,
   live,
-}: {
+  selected,
+  onOpen,
+}: Selection & {
   period: Period;
   range: Range;
   live: boolean;
@@ -165,6 +182,19 @@ function Timeline({
   const { locale } = useLocale();
   const { activity } = period;
   const bucket = hovered === null ? null : activity.buckets[hovered];
+
+  // days and months open their details, today's hours already are the details
+  const toPeriod =
+    activity.unit === "day"
+      ? (bucket: Bucket) => dayPeriod(bucket.key)
+      : activity.unit === "month"
+        ? (bucket: Bucket) => monthPeriod(bucket.key)
+        : null;
+  const open = toPeriod
+    ? activity.buckets.findIndex((bucket) =>
+        samePeriod(toPeriod(bucket), selected),
+      )
+    : -1;
 
   return (
     <>
@@ -197,6 +227,13 @@ function Timeline({
           hovered={hovered}
           onHover={setHovered}
           live={live}
+          selected={open === -1 ? null : open}
+          describe={(bucket) => describe(activity.unit, bucket, locale)}
+          onSelect={
+            toPeriod
+              ? (index) => onOpen(toPeriod(activity.buckets[index]))
+              : undefined
+          }
         />
       </SectionBody>
     </>
@@ -206,7 +243,11 @@ function Timeline({
 /**
  * a year of days, takatime's contribution graph
  */
-function YearGraph({ snapshot }: { snapshot: Snapshot }) {
+function YearGraph({
+  snapshot,
+  selected,
+  onOpen,
+}: Selection & { snapshot: Snapshot }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const { locale } = useLocale();
   const { calendar, summary } = snapshot;
@@ -238,6 +279,8 @@ function YearGraph({ snapshot }: { snapshot: Snapshot }) {
           days={calendar.days}
           hovered={hovered}
           onHover={setHovered}
+          selected={selected?.from === selected?.to ? selected?.from : null}
+          onSelect={(key) => onOpen(dayPeriod(key))}
         />
       </SectionBody>
     </>
@@ -358,8 +401,10 @@ export default function Activity({
   snapshot,
   range,
   live,
+  selected,
+  onOpen,
   className,
-}: {
+}: Selection & {
   snapshot: Snapshot;
   range: Range;
   live: boolean;
@@ -378,12 +423,26 @@ export default function Activity({
         {
           value: "timeline",
           label: "Timeline",
-          content: <Timeline period={period} range={range} live={live} />,
+          content: (
+            <Timeline
+              period={period}
+              range={range}
+              live={live}
+              selected={selected}
+              onOpen={onOpen}
+            />
+          ),
         },
         {
           value: "calendar",
           label: "Calendar",
-          content: <YearGraph snapshot={snapshot} />,
+          content: (
+            <YearGraph
+              snapshot={snapshot}
+              selected={selected}
+              onOpen={onOpen}
+            />
+          ),
         },
         {
           value: "hours",
