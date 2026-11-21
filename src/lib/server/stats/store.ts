@@ -473,6 +473,31 @@ export function entries(): readonly Entry[] {
 }
 
 /**
+ * wait for the first load, or for it to fail
+ *
+ * @param timeout max wait in ms
+ *
+ * @returns {Promise<void>} settles once there is something to show
+ */
+export function whenReady(timeout: number): Promise<void> {
+  const settled = () =>
+    state.loaded || ["error", "unconfigured"].includes(state.status.state);
+
+  if (settled()) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve();
+    };
+
+    const timer = setTimeout(done, timeout);
+    const unsubscribe = subscribe(() => settled() && done());
+  });
+}
+
+/**
  * whether the first load finished
  *
  * @returns {boolean} loaded

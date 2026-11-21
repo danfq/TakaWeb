@@ -11,12 +11,16 @@ const RETRY = 3000;
  * live dashboard data for a view, over server-sent events
  *
  * @param view view to subscribe to
+ * @param initial snapshot and status the page was rendered with
  *
  * @returns latest snapshot, server status, whether the stream is up and whether the snapshot is for another view
  */
-export function useStream(view: View) {
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [status, setStatus] = useState<Status>({ state: "connecting" });
+export function useStream(
+  view: View,
+  initial: { snapshot: Snapshot | null; status: Status },
+) {
+  const [snapshot, setSnapshot] = useState(initial.snapshot);
+  const [status, setStatus] = useState(initial.status);
   const [connected, setConnected] = useState(true);
 
   const { tz, filter } = view;

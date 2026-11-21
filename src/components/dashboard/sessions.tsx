@@ -1,38 +1,27 @@
 import { cn } from "cn";
 import { GitBranch } from "lucide-react";
 import { Section, SectionBody } from "@/components/dashboard/section";
-import { duration, label, time } from "@/lib/stats/format";
+import { useLocale } from "@/components/dashboard/locale";
+import { day, dayKey, duration, label, time } from "@/lib/stats/format";
 import type { Session } from "@/lib/stats/types";
-
-/**
- * local day key of an instant
- *
- * @param ms epoch ms
- *
- * @returns {string} YYYY-MM-DD in the browser's timezone
- */
-const localKey = (ms: number): string =>
-  new Date(ms).toLocaleDateString("en-CA");
 
 /**
  * name a day relative to today
  *
  * @param ms epoch ms within the day
  * @param now current epoch ms
+ * @param locale bcp 47 locale
+ * @param tz iana timezone
  *
  * @returns {string} Today, Yesterday or a date
  */
-function dayName(ms: number, now: number): string {
-  const key = localKey(ms);
+function dayName(ms: number, now: number, locale: string, tz: string): string {
+  const key = dayKey(ms, tz);
 
-  if (key === localKey(now)) return "Today";
-  if (key === localKey(now - 86_400_000)) return "Yesterday";
+  if (key === dayKey(now, tz)) return "Today";
+  if (key === dayKey(now - 86_400_000, tz)) return "Yesterday";
 
-  return new Date(ms).toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  });
+  return day(key, locale, { weekday: "long", month: "short", day: "numeric" });
 }
 
 type SessionsProps = {
@@ -56,10 +45,11 @@ export default function Sessions({
   now,
   className,
 }: SessionsProps) {
+  const { locale, tz } = useLocale();
   const days = new Map<string, Session[]>();
 
   for (const session of sessions) {
-    const name = dayName(session.start, now);
+    const name = dayName(session.start, now, locale, tz);
     days.set(name, [...(days.get(name) ?? []), session]);
   }
 
@@ -127,8 +117,8 @@ export default function Sessions({
                       </div>
                       <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                         <span className="shrink-0 tabular-nums">
-                          {time(session.start)} to{" "}
-                          {live ? "now" : time(session.end)}
+                          {time(session.start, locale, tz)} to{" "}
+                          {live ? "now" : time(session.end, locale, tz)}
                         </span>
                         {session.languages.length > 0 && (
                           <span className="truncate">

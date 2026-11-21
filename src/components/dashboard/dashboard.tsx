@@ -3,13 +3,14 @@ import { cn } from "cn";
 import { Database, Radio, type LucideIcon } from "lucide-react";
 import Activity from "@/components/dashboard/activity";
 import DashboardHeader from "@/components/dashboard/dashboard-header";
+import { LocaleProvider } from "@/components/dashboard/locale";
 import Ranking, { rankColor } from "@/components/dashboard/ranking";
 import { SectionBody, TabbedSection } from "@/components/dashboard/section";
 import Sessions from "@/components/dashboard/sessions";
 import Summary from "@/components/dashboard/summary";
 import { useStream } from "@/components/dashboard/use-stream";
-import type { Filter, Range, Snapshot } from "@/lib/stats/types";
-import { isRange, readFilter, writeFilter } from "@/lib/stats/view";
+import type { Filter, Range, Snapshot, Status } from "@/lib/stats/types";
+import { RANGE_COOKIE, writeFilter } from "@/lib/stats/view";
 
 /**
  * a log this recent means the editor is still sending, takatime uploads every minute
@@ -25,33 +26,33 @@ const SECTIONS = [
 
 type SectionName = (typeof SECTIONS)[number]["value"];
 
-const RANGE_KEY = "takaweb-range";
-
 /**
- * last picked range, defaults to a week
- *
- * @returns {Range} range
+ * everything the server rendered the page with, so the first client render matches it
  */
-function storedRange(): Range {
-  try {
-    const stored = localStorage.getItem(RANGE_KEY);
-    if (isRange(stored)) return stored;
-  } catch {}
-
-  return "week";
-}
+export type DashboardProps = {
+  snapshot: Snapshot | null;
+  status: Status;
+  range: Range;
+  filter: Filter | null;
+  tz: string;
+  locale: string;
+  now: number;
+};
 
 /**
  * re-render on an interval, keeps relative times and the live state fresh
  *
+ * @param initial time the page was rendered at
  * @param interval tick in ms
  *
  * @returns {number} current epoch ms
  */
-function useNow(interval: number): number {
-  const [now, setNow] = useState(Date.now);
+function useNow(initial: number, interval: number): number {
+  const [now, setNow] = useState(initial);
 
   useEffect(() => {
+    setNow(Date.now());
+
     const timer = setInterval(() => setNow(Date.now()), interval);
     return () => clearInterval(timer);
   }, [interval]);
@@ -272,30 +273,34 @@ function Board({
 /**
  * the live takatime dashboard
  */
-export default function Dashboard() {
-  const [range, setRange] = useState<Range>(storedRange);
-  const [filter, setFilter] = useState(() =>
-    readFilter(new URLSearchParams(location.search)),
-  );
-  const [tz] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+export default function Dashboard(initial: DashboardProps) {
+  const [range, setRange] = useState(initial.range);
+  const [filter, setFilter] = useState(initial.filter);
+  const [tz, setTz] = useState(initial.tz);
 
-  const { snapshot, status, connected, stale } = useStream({ tz, filter });
-  const now = useNow(15_000);
+  const { snapshot, status, connected, stale } = useStream(
+    { tz, filter },
+    initial,
+  );
+  const now = useNow(initial.now, 15_000);
 
   const latest = snapshot?.latest ?? null;
   const live = !!latest && now - latest.end < LIVE_WINDOW;
 
+  // the server falls back to utc until the timezone cookie exists
+  useEffect(() => {
+    const browser = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (browser !== tz) setTz(browser);
+  }, []);
+
   /**
-   * switch range and remember it
+   * switch range and remember it for the next server render
    *
    * @param next range
    */
   const changeRange = (next: Range) => {
     setRange(next);
-
-    try {
-      localStorage.setItem(RANGE_KEY, next);
-    } catch {}
+    document.cookie = `${RANGE_COOKIE}=${next};path=/;max-age=31536000;samesite=lax`;
   };
 
   /**
@@ -354,24 +359,26 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <DashboardHeader
-        status={status}
-        connected={connected}
-        loading={!snapshot && status.state !== "unconfigured"}
-        pending={stale}
-        latest={latest}
-        live={live}
-        now={now}
-        range={range}
-        onRange={changeRange}
-        filter={filter}
-        onFilter={changeFilter}
-      />
+    <LocaleProvider value={{ locale: initial.locale, tz }}>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <DashboardHeader
+          status={status}
+          connected={connected}
+          loading={!snapshot && status.state !== "unconfigured"}
+          pending={stale}
+          latest={latest}
+          live={live}
+          now={now}
+          range={range}
+          onRange={changeRange}
+          filter={filter}
+          onFilter={changeFilter}
+        />
 
-      <main className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4 lg:gap-4 lg:px-6 lg:pb-6">
-        {content}
-      </main>
-    </div>
+        <main className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4 lg:gap-4 lg:px-6 lg:pb-6">
+          {content}
+        </main>
+      </div>
+    </LocaleProvider>
   );
 }

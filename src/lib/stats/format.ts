@@ -101,38 +101,54 @@ export function filePath(
 }
 
 /**
- * format a calendar day key
+ * format a calendar day or month key, always in utc since keys are plain dates
  *
- * @param key YYYY-MM-DD
+ * @param key YYYY-MM-DD or YYYY-MM
+ * @param locale bcp 47 locale
  * @param options intl options
  *
  * @returns {string} formatted date
  */
 export function day(
   key: string,
+  locale: string,
   options: Intl.DateTimeFormatOptions = {
     weekday: "short",
     month: "short",
     day: "numeric",
   },
 ): string {
-  return new Date(
-    `${key.length === 7 ? `${key}-01` : key}T00:00:00Z`,
-  ).toLocaleDateString(undefined, { ...options, timeZone: "UTC" });
+  const date = new Date(`${key.length === 7 ? `${key}-01` : key}T00:00:00Z`);
+
+  return date.toLocaleDateString(locale, { ...options, timeZone: "UTC" });
 }
 
 /**
- * format an instant as a local time of day
+ * format an instant as a time of day
  *
  * @param ms epoch ms
+ * @param locale bcp 47 locale
+ * @param tz iana timezone
  *
  * @returns {string} e.g. 14:05
  */
-export const time = (ms: number): string =>
-  new Date(ms).toLocaleTimeString(undefined, {
+export const time = (ms: number, locale: string, tz: string): string =>
+  new Date(ms).toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: tz,
   });
+
+/**
+ * calendar day an instant falls on
+ *
+ * @param ms epoch ms
+ * @param tz iana timezone
+ *
+ * @returns {string} YYYY-MM-DD
+ */
+export const dayKey = (ms: number, tz: string): string =>
+  new Date(ms).toLocaleDateString("en-CA", { timeZone: tz });
 
 /**
  * percent change between two values

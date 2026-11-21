@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { useLocale } from "@/components/dashboard/locale";
 import { day, duration } from "@/lib/stats/format";
 import type { Summary as SummaryData } from "@/lib/stats/types";
 
@@ -54,6 +55,7 @@ export default function Summary({
   summary: SummaryData;
   live: boolean;
 }) {
+  const { locale } = useLocale();
   const target = summary.average;
   const progress = target ? Math.min(1, summary.today / target) : 0;
 
@@ -93,7 +95,7 @@ export default function Summary({
         value={duration(summary.average)}
       >
         {summary.bestDay
-          ? `Record ${duration(summary.bestDay.seconds)} on ${day(summary.bestDay.date, { month: "short", day: "numeric", year: "numeric" })}`
+          ? `Record ${duration(summary.bestDay.seconds)} on ${day(summary.bestDay.date, locale, { month: "short", day: "numeric", year: "numeric" })}`
           : "No record yet"}
       </Stat>
 
@@ -103,7 +105,7 @@ export default function Summary({
         value={duration(summary.allTime)}
       >
         {summary.since
-          ? `${summary.activeDays} active days since ${day(summary.since, { month: "short", year: "numeric" })}`
+          ? `${summary.activeDays} active days since ${day(summary.since, locale, { month: "short", year: "numeric" })}`
           : "Nothing logged yet"}
       </Stat>
     </div>

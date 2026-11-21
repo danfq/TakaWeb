@@ -13,6 +13,7 @@ import BarChart from "@/components/dashboard/bar-chart";
 import Calendar from "@/components/dashboard/calendar";
 import { SectionBody, TabbedSection } from "@/components/dashboard/section";
 import { change, day, duration } from "@/lib/stats/format";
+import { useLocale } from "@/components/dashboard/locale";
 import type { Bucket, Period, Range, Snapshot } from "@/lib/stats/types";
 
 type Unit = Period["activity"]["unit"];
@@ -100,18 +101,19 @@ function Trend({ ratio, against }: { ratio: number | null; against: string }) {
  *
  * @param unit bucket unit
  * @param bucket bucket
+ * @param locale bcp 47 locale
  *
  * @returns {string} label
  */
-function describe(unit: Unit, bucket: Bucket): string {
+function describe(unit: Unit, bucket: Bucket, locale: string): string {
   if (unit === "hour") {
     const next = String((Number(bucket.key) + 1) % 24).padStart(2, "0");
     return `Today, ${bucket.key}:00 to ${next}:00`;
   }
 
-  if (unit === "day") return day(bucket.key);
+  if (unit === "day") return day(bucket.key, locale);
 
-  return day(bucket.key, { month: "long", year: "numeric" });
+  return day(bucket.key, locale, { month: "long", year: "numeric" });
 }
 
 /**
@@ -119,19 +121,21 @@ function describe(unit: Unit, bucket: Bucket): string {
  *
  * @param unit bucket unit
  * @param buckets buckets
+ * @param locale bcp 47 locale
  *
  * @returns tick formatter
  */
-function ticks(unit: Unit, buckets: Bucket[]) {
+function ticks(unit: Unit, buckets: Bucket[], locale: string) {
   const last = buckets.length - 1;
 
   return (bucket: Bucket, index: number): string => {
     if (unit === "hour") return index % 3 === 0 ? bucket.key : "";
 
     if (unit === "day") {
-      if (buckets.length <= 7) return day(bucket.key, { weekday: "short" });
+      if (buckets.length <= 7)
+        return day(bucket.key, locale, { weekday: "short" });
       return (last - index) % 5 === 0
-        ? day(bucket.key, { day: "numeric", month: "short" })
+        ? day(bucket.key, locale, { day: "numeric", month: "short" })
         : "";
     }
 
@@ -141,7 +145,7 @@ function ticks(unit: Unit, buckets: Bucket[]) {
 
     return bucket.key.endsWith("-01") || every === 12
       ? bucket.key.slice(0, 4)
-      : day(bucket.key, { month: "short" });
+      : day(bucket.key, locale, { month: "short" });
   };
 }
 
@@ -158,6 +162,7 @@ function Timeline({
   live: boolean;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
+  const { locale } = useLocale();
   const { activity } = period;
   const bucket = hovered === null ? null : activity.buckets[hovered];
 
@@ -166,7 +171,7 @@ function Timeline({
       {bucket ? (
         <Readout
           value={duration(bucket.seconds)}
-          caption={describe(activity.unit, bucket)}
+          caption={describe(activity.unit, bucket, locale)}
         />
       ) : (
         <Readout
@@ -187,7 +192,7 @@ function Timeline({
         <BarChart
           className="flex-1"
           buckets={activity.buckets}
-          tick={ticks(activity.unit, activity.buckets)}
+          tick={ticks(activity.unit, activity.buckets, locale)}
           current={activity.current}
           hovered={hovered}
           onHover={setHovered}
@@ -203,6 +208,7 @@ function Timeline({
  */
 function YearGraph({ snapshot }: { snapshot: Snapshot }) {
   const [hovered, setHovered] = useState<string | null>(null);
+  const { locale } = useLocale();
   const { calendar, summary } = snapshot;
 
   const index = hovered
@@ -217,7 +223,7 @@ function YearGraph({ snapshot }: { snapshot: Snapshot }) {
       {hovered ? (
         <Readout
           value={duration(calendar.days[index] ?? 0)}
-          caption={day(hovered)}
+          caption={day(hovered, locale)}
         />
       ) : (
         <Readout

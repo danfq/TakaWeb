@@ -1,6 +1,13 @@
-import type { View } from "@/lib/stats/types";
+import type { Snapshot, Status, View } from "@/lib/stats/types";
 import { snapshot } from "./snapshot";
-import { entries, isLoaded, retain, status, subscribe } from "./store";
+import {
+  entries,
+  isLoaded,
+  retain,
+  status,
+  subscribe,
+  whenReady,
+} from "./store";
 
 /**
  * a connected client
@@ -35,6 +42,11 @@ let unsubscribe: (() => void) | null = null;
  */
 const keyOf = ({ tz, filter }: View): string =>
   JSON.stringify([tz, filter?.dimension, filter?.value]);
+
+/**
+ * how long a page render waits for the first load before rendering without data
+ */
+const RENDER_WAIT = 5000;
 
 /**
  * recompute a channel and push it when it changed
@@ -111,4 +123,35 @@ export function join(view: View, send: Subscriber): () => void {
       unsubscribe = null;
     }
   };
+}
+
+/**
+ * the current snapshot for a view, for rendering the page on the server
+ *
+ * @param view view
+ *
+ * @returns {Promise<{ snapshot: Snapshot | null; status: Status }>} snapshot and status
+ */
+export async function initial(
+  view: View,
+): Promise<{ snapshot: Snapshot | null; status: Status }> {
+  // keeps the store warm until the page's stream connects
+  const release = retain();
+
+  try {
+    await whenReady(RENDER_WAIT);
+
+    if (!isLoaded()) return { snapshot: null, status: status() };
+
+    const cached = channels.get(keyOf(view))?.payload;
+
+    return {
+      snapshot: cached
+        ? JSON.parse(cached)
+        : snapshot(view, entries(), Date.now()),
+      status: status(),
+    };
+  } finally {
+    release();
+  }
 }

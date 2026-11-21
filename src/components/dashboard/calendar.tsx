@@ -1,4 +1,5 @@
 import { cn } from "cn";
+import { useLocale } from "@/components/dashboard/locale";
 import { day } from "@/lib/stats/format";
 
 const HOUR = 3600;
@@ -50,6 +51,7 @@ export default function Calendar({
   hovered,
   onHover,
 }: CalendarProps) {
+  const { locale } = useLocale();
   const weeks = Math.ceil(days.length / 7);
   const columns = `1.75rem repeat(${weeks}, minmax(0, 1fr))`;
 
@@ -60,7 +62,10 @@ export default function Calendar({
       const key = addDays(start, week * 7 + weekday);
 
       if (key.endsWith("-01") && week * 7 + weekday < days.length) {
-        months.push({ column: week + 2, label: day(key, { month: "short" }) });
+        months.push({
+          column: week + 2,
+          label: day(key, locale, { month: "short" }),
+        });
       }
     }
   }

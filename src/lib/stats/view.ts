@@ -1,6 +1,19 @@
 import { FILTERABLE, RANGES, type Filter, type Range } from "@/lib/stats/types";
 
 /**
+ * cookies that let the server render the dashboard as the browser would
+ */
+export const TZ_COOKIE = "takaweb_tz";
+export const RANGE_COOKIE = "takaweb_range";
+
+export const DEFAULT_RANGE: Range = "week";
+
+/**
+ * keeps the timezone cookie current, inlined into every page head
+ */
+export const TZ_SCRIPT = `document.cookie=${JSON.stringify(`${TZ_COOKIE}=`)}+encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)+";path=/;max-age=31536000;samesite=lax"`;
+
+/**
  * check a value is a known range
  *
  * @param value raw value
