@@ -19,6 +19,9 @@ const MAX_DAYS = 400;
  */
 const isDayKey = (value: string | null): value is string =>
   !!value &&
+  // keeps the day table a sane size, takatime logs are far younger than 2000
+  value >= "2000-01-01" &&
+  value < "2100-01-01" &&
   /^\d{4}-\d{2}-\d{2}$/.test(value) &&
   !Number.isNaN(Date.parse(value)) &&
   new Date(`${value}T00:00:00Z`).toISOString().startsWith(value);

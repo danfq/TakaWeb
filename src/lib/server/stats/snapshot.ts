@@ -26,6 +26,17 @@ import {
 import type { Entry } from "./store";
 
 const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+
+/**
+ * the calendar day after a day key
+ *
+ * @param key YYYY-MM-DD
+ *
+ * @returns {string} next YYYY-MM-DD
+ */
+const nextDay = (key: string): string =>
+  new Date(Date.parse(key) + DAY).toISOString().slice(0, 10);
 
 /**
  * a gap longer than this splits a session, matches takatime's idle cutoff in spirit
@@ -679,7 +690,24 @@ export function detail(
     ? all.filter((entry) => entry[filter.dimension] === filter.value)
     : all;
 
-  const table = days(view.tz, all[0]?.start ?? now, now);
+  // whole months compare against the month before, anything else against the same span
+  const month =
+    period.from.endsWith("-01") &&
+    monthStart(period.from, -1) === nextDay(period.to);
+  const length = (Date.parse(period.to) - Date.parse(period.from)) / DAY + 1;
+  const earliest = month
+    ? monthStart(period.from, 1)
+    : new Date(Date.parse(period.from) - length * DAY)
+        .toISOString()
+        .slice(0, 10);
+
+  // reach back to the compared period, logs may start later than it, a day of margin covers any offset
+  const table = days(
+    view.tz,
+    Math.min(all[0]?.start ?? now, Date.parse(earliest) - DAY),
+    now,
+  );
+
   // a period in the future comes back empty
   const from = Math.min(
     Math.max(keyIndex(table, period.from), 0),
@@ -688,14 +716,7 @@ export function detail(
   const to = Math.min(keyIndex(table, period.to), table.today);
   const span = Math.max(to - from + 1, 0);
 
-  // whole months compare against the month before, anything else against the same span
-  const month =
-    period.from.endsWith("-01") &&
-    keyIndex(table, monthStart(period.from, -1)) - 1 ===
-      keyIndex(table, period.to);
-  const previous: [number, number] = month
-    ? [keyIndex(table, monthStart(period.from, 1)), from - 1]
-    : [from - span, from - 1];
+  const previous: [number, number] = [keyIndex(table, earliest), from - 1];
 
   const { daily, hours, focused } = distribute(list, table, [[from, to]], from);
 
