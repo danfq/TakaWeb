@@ -24,7 +24,7 @@ env:
         .env.example > .env
     echo "created .env"
 
-# start backing services (mongo), wait until healthy and sync the read-only user
+# start backing services (mongo), wait until healthy, set up the replica set and sync the read-only user
 up: env
     docker compose up -d --wait mongo
     docker compose run --rm mongo-init
@@ -43,7 +43,7 @@ logs *services:
 
 # open a mongo shell
 mongosh:
-    docker compose exec mongo mongosh -u "$MONGO_USERNAME" -p "$MONGO_PASSWORD" --authenticationDatabase admin
+    docker compose exec mongo mongosh --port "${MONGO_PORT:-27017}" -u "$MONGO_USERNAME" -p "$MONGO_PASSWORD" --authenticationDatabase admin
 
 # start services and the astro dev server with hmr
 dev: up
@@ -52,7 +52,7 @@ dev: up
     # reload .env in case it was just created by up
     set -a; source .env; set +a
     # point the dev server at the published mongo as the read-only user
-    export MONGO_URI="mongodb://${MONGO_READONLY_USERNAME:-takaweb}:${MONGO_READONLY_PASSWORD}@127.0.0.1:${MONGO_PORT:-27017}/takatime?authSource=admin"
+    export MONGO_URI="mongodb://${MONGO_READONLY_USERNAME:-takaweb}:${MONGO_READONLY_PASSWORD}@127.0.0.1:${MONGO_PORT:-27017}/takatime?authSource=admin&directConnection=true"
     exec bun run dev
 
 # build for production

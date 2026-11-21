@@ -1,7 +1,38 @@
 ---
 import MainLayout from "@/layouts/main.astro";
+import Dashboard from "@/components/dashboard/dashboard";
+import { preferredLocale } from "@/lib/server/locale";
+import { isTimeZone } from "@/lib/server/stats/days";
+import { initial } from "@/lib/server/stats/hub";
+import {
+  DEFAULT_RANGE,
+  RANGE_COOKIE,
+  TZ_COOKIE,
+  isRange,
+  readFilter,
+} from "@/lib/stats/view";
+
+// render with the browser's view, so hydration picks up exactly where the server left off
+const tz = Astro.cookies.get(TZ_COOKIE)?.value;
+const range = Astro.cookies.get(RANGE_COOKIE)?.value;
+
+const view = {
+  tz: tz && isTimeZone(tz) ? tz : "UTC",
+  filter: readFilter(Astro.url.searchParams),
+};
+
+const { snapshot, status } = await initial(view);
 ---
 
-<MainLayout>
-  <p>ola</p>
+<MainLayout app>
+  <Dashboard
+    client:load
+    snapshot={snapshot}
+    status={status}
+    range={isRange(range) ? range : DEFAULT_RANGE}
+    filter={view.filter}
+    tz={view.tz}
+    locale={preferredLocale(Astro.request.headers.get("accept-language"))}
+    now={Date.now()}
+  />
 </MainLayout>

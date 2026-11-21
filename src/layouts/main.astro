@@ -1,13 +1,17 @@
 ---
 import "@/styles/global.css";
-import { ThemeScript } from "@danfq/theme-toggle";
+import { cn } from "cn";
 import Header from "@/components/layout/header.astro";
+import { TZ_SCRIPT } from "@/lib/stats/view";
+import { THEME_SCRIPT, themeCss } from "@/lib/themes";
 
 interface Props {
   title?: string;
+  // fixed viewport shell, the page renders its own header and never scrolls
+  app?: boolean;
 }
 
-const { title } = Astro.props;
+const { title, app = false } = Astro.props;
 ---
 
 <html lang="en">
@@ -18,7 +22,11 @@ const { title } = Astro.props;
     <meta name="generator" content={Astro.generator} />
 
     {/* theme */}
-    <ThemeScript />
+    <style is:inline set:html={themeCss()} />
+    <script is:inline set:html={THEME_SCRIPT} />
+
+    {/* lets the server render dates in the browser's timezone */}
+    <script is:inline set:html={TZ_SCRIPT} />
 
     {/* icons & fonts */}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -41,8 +49,13 @@ const { title } = Astro.props;
     {/* title */}
     <title>{title ? `${title} · TakaWeb` : "TakaWeb"}</title>
   </head>
-  <body class="flex min-h-svh flex-col">
-    <Header />
+  <body
+    class={cn(
+      "flex flex-col",
+      app ? "h-svh overflow-hidden" : "min-h-svh",
+    )}
+  >
+    {!app && <Header />}
     <slot />
   </body>
 </html>

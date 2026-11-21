@@ -38,6 +38,11 @@ export const onRequest = defineMiddleware((context, next) => {
   const { pathname } = context.url;
   const { user } = context.locals;
 
+  // api clients cannot follow a login redirect
+  if (pathname.startsWith("/api/")) {
+    return user ? next() : new Response(null, { status: 401 });
+  }
+
   // force setup until the admin exists
   if (!hasAdmin()) {
     return pathname === "/setup" ? next() : context.redirect("/setup");

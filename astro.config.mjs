@@ -34,6 +34,12 @@ export default defineConfig({
         access: "secret",
         default: "data",
       }),
+      // takatime mongo, ideally as a read-only user
+      MONGO_URI: envField.string({
+        context: "server",
+        access: "secret",
+        optional: true,
+      }),
     },
   },
 });
