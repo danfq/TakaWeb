@@ -24,6 +24,72 @@ function dayName(ms: number, now: number, locale: string, tz: string): string {
   return day(key, locale, { weekday: "long", month: "short", day: "numeric" });
 }
 
+/**
+ * one session: project, time span, languages and duration
+ */
+export function SessionRow({
+  session,
+  color,
+  live,
+}: {
+  session: Session;
+  color?: string;
+  // still going, pulses and ends "now"
+  live: boolean;
+}) {
+  const { locale, tz } = useLocale();
+
+  return (
+    <li className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border/60 py-2.5 last:border-0">
+      <span className="relative flex size-2">
+        {live && (
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+        )}
+        <span
+          className={cn(
+            "relative size-2 rounded-full",
+            live && "bg-emerald-500",
+          )}
+          style={live ? undefined : { background: color ?? "var(--chart-5)" }}
+        />
+      </span>
+
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium">
+          {label("project", session.project)}
+        </div>
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="shrink-0 tabular-nums">
+            {time(session.start, locale, tz)} to{" "}
+            {live ? "now" : time(session.end, locale, tz)}
+          </span>
+          {session.languages.length > 0 && (
+            <span className="truncate">
+              ·{" "}
+              {session.languages
+                .map((name) => label("language", name))
+                .join(", ")}
+            </span>
+          )}
+          {session.branch && (
+            <span className="hidden shrink-0 items-center gap-0.5 @lg:inline-flex">
+              · <GitBranch className="size-3" />
+              {session.branch}
+            </span>
+          )}
+          {session.editor && (
+            <span className="hidden shrink-0 @2xl:inline">
+              · {label("editor", session.editor)}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <span className="text-sm tabular-nums">{duration(session.seconds)}</span>
+    </li>
+  );
+}
+
 type SessionsProps = {
   sessions: Session[];
   count: number;
@@ -81,73 +147,15 @@ export default function Sessions({
               </span>
             </h3>
 
-            <ul className="mb-2">
-              {list.map((session) => {
-                const live = session.end >= liveSince;
-
-                return (
-                  <li
-                    key={`${session.project}-${session.start}`}
-                    className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border/60 py-2.5 last:border-0"
-                  >
-                    <span className="relative flex size-2">
-                      {live && (
-                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-75" />
-                      )}
-                      <span
-                        className={cn(
-                          "relative size-2 rounded-full",
-                          live && "bg-emerald-500",
-                        )}
-                        style={
-                          live
-                            ? undefined
-                            : {
-                                background:
-                                  colors.get(session.project) ??
-                                  "var(--chart-5)",
-                              }
-                        }
-                      />
-                    </span>
-
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">
-                        {label("project", session.project)}
-                      </div>
-                      <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="shrink-0 tabular-nums">
-                          {time(session.start, locale, tz)} to{" "}
-                          {live ? "now" : time(session.end, locale, tz)}
-                        </span>
-                        {session.languages.length > 0 && (
-                          <span className="truncate">
-                            ·{" "}
-                            {session.languages
-                              .map((name) => label("language", name))
-                              .join(", ")}
-                          </span>
-                        )}
-                        {session.branch && (
-                          <span className="hidden shrink-0 items-center gap-0.5 xl:inline-flex">
-                            · <GitBranch className="size-3" />
-                            {session.branch}
-                          </span>
-                        )}
-                        {session.editor && (
-                          <span className="hidden shrink-0 2xl:inline">
-                            · {label("editor", session.editor)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <span className="text-sm tabular-nums">
-                      {duration(session.seconds)}
-                    </span>
-                  </li>
-                );
-              })}
+            <ul className="mb-2 @container">
+              {list.map((session) => (
+                <SessionRow
+                  key={`${session.project}-${session.start}`}
+                  session={session}
+                  color={colors.get(session.project)}
+                  live={session.end >= liveSince}
+                />
+              ))}
             </ul>
           </div>
         ))}
