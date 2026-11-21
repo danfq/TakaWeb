@@ -1,7 +1,9 @@
 ---
 import MainLayout from "@/layouts/main.astro";
+import Dashboard from "@/components/dashboard/dashboard";
 ---
 
-<MainLayout>
-  <p>ola</p>
+<MainLayout app>
+  {/* reads the timezone, range and filter from the browser, so it renders client side */}
+  <Dashboard client:only="react" />
 </MainLayout>

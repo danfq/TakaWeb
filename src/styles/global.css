@@ -111,6 +111,12 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* subtle scrollbars for the scrollable sections */
+@utility scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
