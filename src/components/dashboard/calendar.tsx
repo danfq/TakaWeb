@@ -117,7 +117,7 @@ export default function Calendar({
 
           const props = {
             className: cn(
-              "aspect-square rounded-[3px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "aspect-square rounded-[3px] transition-colors outline-none",
               LEVELS[level(seconds)],
               (hovered === key || selected === key) &&
                 "ring-2 ring-foreground/60",

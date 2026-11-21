@@ -153,7 +153,7 @@ function SheetResizeHandle({
         onCommit(next)
       }}
     >
-      <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors group-hover/resize:bg-ring group-focus-visible/resize:bg-ring group-data-dragging/resize:bg-ring" />
+      <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors group-hover/resize:bg-ring group-data-dragging/resize:bg-ring" />
     </div>
   )
 }

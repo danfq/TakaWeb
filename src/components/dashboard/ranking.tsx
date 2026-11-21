@@ -110,7 +110,7 @@ export default function Ranking({
                     : `Only show ${label(dimension, item.name)}`
                 }
                 className={cn(
-                  "w-full rounded-2xl px-2 py-2 text-left transition-colors outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/40",
+                  "w-full rounded-2xl px-2 py-2 text-left transition-colors outline-none hover:bg-muted/60",
                   active && "bg-muted",
                 )}
                 onClick={() =>

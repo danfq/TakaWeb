@@ -123,7 +123,7 @@ export default function BarChart({
                 type="button"
                 aria-label={describe?.(bucket)}
                 aria-pressed={selected === index}
-                className="flex h-full min-w-0 flex-1 items-end rounded-t-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                className="flex h-full min-w-0 flex-1 items-end rounded-t-md outline-none"
                 onMouseEnter={() => onHover(index)}
                 onFocus={() => onHover(index)}
                 onBlur={() => onHover(null)}
