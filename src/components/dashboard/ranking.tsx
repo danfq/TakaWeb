@@ -117,7 +117,10 @@ export default function Ranking({
                   onFilter(
                     active
                       ? null
-                      : { dimension: dimension as Dimension, value: item.name },
+                      : {
+                          dimension: dimension as Filter["dimension"],
+                          value: item.name,
+                        },
                   )
                 }
               >

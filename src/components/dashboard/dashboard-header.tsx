@@ -29,7 +29,6 @@ const FILTER_ICONS: Record<Filter["dimension"], LucideIcon> = {
   language: Code2,
   editor: SquarePen,
   os: Laptop,
-  branch: FolderGit2,
 };
 
 type LiveProps = {
@@ -116,6 +115,8 @@ function LiveIndicator({
 }
 
 type DashboardHeaderProps = LiveProps & {
+  // a new filter is loading
+  pending: boolean;
   range: Range;
   onRange: (range: Range) => void;
   filter: Filter | null;
@@ -130,6 +131,7 @@ export default function DashboardHeader({
   onRange,
   filter,
   onFilter,
+  pending,
   ...live
 }: DashboardHeaderProps) {
   const FilterIcon = filter ? FILTER_ICONS[filter.dimension] : null;
@@ -160,7 +162,7 @@ export default function DashboardHeader({
               <span className="truncate">
                 {label(filter.dimension, filter.value)}
               </span>
-              <X className="opacity-60" />
+              {pending ? <Spinner /> : <X className="opacity-60" />}
             </Button>
           )}
         </div>

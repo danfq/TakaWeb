@@ -8,21 +8,13 @@ import { SectionBody, TabbedSection } from "@/components/dashboard/section";
 import Sessions from "@/components/dashboard/sessions";
 import Summary from "@/components/dashboard/summary";
 import { useStream } from "@/components/dashboard/use-stream";
-import {
-  RANGES,
-  type Filter,
-  type Range,
-  type Snapshot,
-} from "@/lib/stats/types";
+import type { Filter, Range, Snapshot } from "@/lib/stats/types";
+import { isRange, readFilter, writeFilter } from "@/lib/stats/view";
 
 /**
  * a log this recent means the editor is still sending, takatime uploads every minute
  */
 const LIVE_WINDOW = 3 * 60 * 1000;
-
-const RANGE_KEY = "takaweb-range";
-
-const FILTERS = ["project", "language", "editor", "os"] as const;
 
 const SECTIONS = [
   { value: "activity", label: "Activity" },
@@ -33,6 +25,8 @@ const SECTIONS = [
 
 type SectionName = (typeof SECTIONS)[number]["value"];
 
+const RANGE_KEY = "takaweb-range";
+
 /**
  * last picked range, defaults to a week
  *
@@ -40,27 +34,11 @@ type SectionName = (typeof SECTIONS)[number]["value"];
  */
 function storedRange(): Range {
   try {
-    const stored = localStorage.getItem(RANGE_KEY) as Range;
-    if (RANGES.includes(stored)) return stored;
+    const stored = localStorage.getItem(RANGE_KEY);
+    if (isRange(stored)) return stored;
   } catch {}
 
   return "week";
-}
-
-/**
- * filter from the url, so a filtered view survives reloads and can be shared
- *
- * @returns {Filter | null} filter
- */
-function urlFilter(): Filter | null {
-  const params = new URLSearchParams(location.search);
-
-  for (const dimension of FILTERS) {
-    const value = params.get(dimension);
-    if (value !== null) return { dimension, value };
-  }
-
-  return null;
 }
 
 /**
@@ -128,12 +106,14 @@ function Skeleton() {
  */
 function Board({
   snapshot,
+  range,
   live,
   now,
   filter,
   onFilter,
 }: {
   snapshot: Snapshot;
+  range: Range;
   live: boolean;
   now: number;
   filter: Filter | null;
@@ -143,7 +123,8 @@ function Board({
   const [projectTab, setProjectTab] = useState("project");
   const [languageTab, setLanguageTab] = useState("language");
 
-  const { breakdown, files, sessions } = snapshot;
+  const { breakdown, files, sessionCount, start } = snapshot.ranges[range];
+  const sessions = snapshot.sessions.filter((session) => session.end > start);
 
   // branches only mean something inside one project
   const byProject = filter?.dimension === "project" ? filter.value : undefined;
@@ -185,6 +166,7 @@ function Board({
       <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <Activity
           snapshot={snapshot}
+          range={range}
           live={live}
           className={place("activity", "lg:border-b")}
         />
@@ -246,7 +228,7 @@ function Board({
 
         <Sessions
           sessions={sessions}
-          count={snapshot.sessionCount}
+          count={sessionCount}
           colors={colors}
           liveSince={now - LIVE_WINDOW}
           now={now}
@@ -292,14 +274,12 @@ function Board({
  */
 export default function Dashboard() {
   const [range, setRange] = useState<Range>(storedRange);
-  const [filter, setFilter] = useState<Filter | null>(urlFilter);
+  const [filter, setFilter] = useState(() =>
+    readFilter(new URLSearchParams(location.search)),
+  );
   const [tz] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
 
-  const { snapshot, status, connected, stale } = useStream({
-    tz,
-    range,
-    filter,
-  });
+  const { snapshot, status, connected, stale } = useStream({ tz, filter });
   const now = useNow(15_000);
 
   const latest = snapshot?.latest ?? null;
@@ -327,8 +307,7 @@ export default function Dashboard() {
     setFilter(next);
 
     const url = new URL(location.href);
-    for (const dimension of FILTERS) url.searchParams.delete(dimension);
-    if (next) url.searchParams.set(next.dimension, next.value);
+    writeFilter(url.searchParams, next);
 
     history.replaceState(history.state, "", url);
   };
@@ -353,12 +332,7 @@ export default function Dashboard() {
       <>
         <Summary summary={snapshot.summary} live={live} />
 
-        <div
-          className={cn(
-            "flex min-h-0 flex-1 flex-col overflow-hidden rounded-4xl bg-card ring-1 ring-foreground/10 transition-opacity",
-            stale && "opacity-60",
-          )}
-        >
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-4xl bg-card ring-1 ring-foreground/10">
           {snapshot.empty ? (
             <Notice icon={Radio} title="Waiting for your first log">
               Start coding in an editor with the TakaTime plugin pointed at this
@@ -367,6 +341,7 @@ export default function Dashboard() {
           ) : (
             <Board
               snapshot={snapshot}
+              range={range}
               live={live}
               now={now}
               filter={filter}
@@ -384,6 +359,7 @@ export default function Dashboard() {
         status={status}
         connected={connected}
         loading={!snapshot && status.state !== "unconfigured"}
+        pending={stale}
         latest={latest}
         live={live}
         now={now}

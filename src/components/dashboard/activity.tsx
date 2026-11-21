@@ -13,7 +13,9 @@ import BarChart from "@/components/dashboard/bar-chart";
 import Calendar from "@/components/dashboard/calendar";
 import { SectionBody, TabbedSection } from "@/components/dashboard/section";
 import { change, day, duration } from "@/lib/stats/format";
-import type { Bucket, Range, Snapshot } from "@/lib/stats/types";
+import type { Bucket, Period, Range, Snapshot } from "@/lib/stats/types";
+
+type Unit = Period["activity"]["unit"];
 
 export const RANGE_LABELS: Record<Range, string> = {
   today: "Today",
@@ -101,7 +103,7 @@ function Trend({ ratio, against }: { ratio: number | null; against: string }) {
  *
  * @returns {string} label
  */
-function describe(unit: Snapshot["activity"]["unit"], bucket: Bucket): string {
+function describe(unit: Unit, bucket: Bucket): string {
   if (unit === "hour") {
     const next = String((Number(bucket.key) + 1) % 24).padStart(2, "0");
     return `Today, ${bucket.key}:00 to ${next}:00`;
@@ -120,7 +122,7 @@ function describe(unit: Snapshot["activity"]["unit"], bucket: Bucket): string {
  *
  * @returns tick formatter
  */
-function ticks(unit: Snapshot["activity"]["unit"], buckets: Bucket[]) {
+function ticks(unit: Unit, buckets: Bucket[]) {
   const last = buckets.length - 1;
 
   return (bucket: Bucket, index: number): string => {
@@ -146,16 +148,18 @@ function ticks(unit: Snapshot["activity"]["unit"], buckets: Bucket[]) {
 /**
  * the range as a bar chart
  */
-function Timeline({ snapshot, live }: { snapshot: Snapshot; live: boolean }) {
+function Timeline({
+  period,
+  range,
+  live,
+}: {
+  period: Period;
+  range: Range;
+  live: boolean;
+}) {
   const [hovered, setHovered] = useState<number | null>(null);
-  const { activity, view } = snapshot;
+  const { activity } = period;
   const bucket = hovered === null ? null : activity.buckets[hovered];
-
-  // the bar for right now
-  const current =
-    activity.unit === "hour"
-      ? new Date().getHours()
-      : activity.buckets.length - 1;
 
   return (
     <>
@@ -169,10 +173,10 @@ function Timeline({ snapshot, live }: { snapshot: Snapshot; live: boolean }) {
           value={duration(activity.total)}
           caption={
             <span className="inline-flex flex-wrap items-center gap-x-3">
-              {RANGE_LABELS[view.range]}
+              {RANGE_LABELS[range]}
               <Trend
                 ratio={change(activity.total, activity.previous)}
-                against={PREVIOUS_LABELS[view.range]}
+                against={PREVIOUS_LABELS[range]}
               />
             </span>
           }
@@ -184,7 +188,7 @@ function Timeline({ snapshot, live }: { snapshot: Snapshot; live: boolean }) {
           className="flex-1"
           buckets={activity.buckets}
           tick={ticks(activity.unit, activity.buckets)}
-          current={current}
+          current={activity.current}
           hovered={hovered}
           onHover={setHovered}
           live={live}
@@ -237,9 +241,9 @@ function YearGraph({ snapshot }: { snapshot: Snapshot }) {
 /**
  * when in the day the coding happens, with takatime's persona
  */
-function Hours({ snapshot }: { snapshot: Snapshot }) {
+function Hours({ period, range }: { period: Period; range: Range }) {
   const [hovered, setHovered] = useState<number | null>(null);
-  const { hours } = snapshot;
+  const { hours } = period;
 
   const total = hours.reduce((sum, seconds) => sum + seconds, 0);
   const parts = PARTS.map((part) => ({
@@ -262,7 +266,7 @@ function Hours({ snapshot }: { snapshot: Snapshot }) {
       {hovered !== null ? (
         <Readout
           value={duration(hours[hovered])}
-          caption={`between ${buckets[hovered].key}:00 and ${String((hovered + 1) % 24).padStart(2, "0")}:00, ${RANGE_LABELS[snapshot.view.range].toLowerCase()}`}
+          caption={`between ${buckets[hovered].key}:00 and ${String((hovered + 1) % 24).padStart(2, "0")}:00, ${RANGE_LABELS[range].toLowerCase()}`}
         />
       ) : (
         <Readout
@@ -317,13 +321,16 @@ function Hours({ snapshot }: { snapshot: Snapshot }) {
  */
 export default function Activity({
   snapshot,
+  range,
   live,
   className,
 }: {
   snapshot: Snapshot;
+  range: Range;
   live: boolean;
   className?: string;
 }) {
+  const period = snapshot.ranges[range];
   const [tab, setTab] = useState("timeline");
 
   return (
@@ -336,7 +343,7 @@ export default function Activity({
         {
           value: "timeline",
           label: "Timeline",
-          content: <Timeline snapshot={snapshot} live={live} />,
+          content: <Timeline period={period} range={range} live={live} />,
         },
         {
           value: "calendar",
@@ -346,7 +353,7 @@ export default function Activity({
         {
           value: "hours",
           label: "Hours",
-          content: <Hours snapshot={snapshot} />,
+          content: <Hours period={period} range={range} />,
         },
       ]}
     />

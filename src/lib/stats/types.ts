@@ -19,14 +19,19 @@ export const DIMENSIONS = [
 export type Dimension = (typeof DIMENSIONS)[number];
 
 /**
- * narrows every stat down to logs matching one value
+ * dimensions a view can be filtered by, branches only make sense within a project
  */
-export type Filter = { dimension: Dimension; value: string };
+export const FILTERABLE = ["project", "language", "editor", "os"] as const;
 
 /**
- * what a client subscribes to
+ * narrows every stat down to logs matching one value
  */
-export type View = { tz: string; range: Range; filter: Filter | null };
+export type Filter = { dimension: (typeof FILTERABLE)[number]; value: string };
+
+/**
+ * what a client subscribes to, every range comes along so switching is instant
+ */
+export type View = { tz: string; filter: Filter | null };
 
 /**
  * a named share of coded time
@@ -76,27 +81,38 @@ export type Summary = {
   since: string | null;
 };
 
+/**
+ * everything that depends on the range
+ */
+export type Period = {
+  // range start, epoch ms
+  start: number;
+  activity: {
+    total: number;
+    previous: number | null;
+    unit: "hour" | "day" | "month";
+    buckets: Bucket[];
+    // bucket holding right now
+    current: number;
+  };
+  // seconds per local hour of day
+  hours: number[];
+  breakdown: Record<Dimension, Item[]>;
+  files: Item[];
+  sessionCount: number;
+};
+
 export type Snapshot = {
   view: View;
   // no logs at all, regardless of filter
   empty: boolean;
   latest: Latest | null;
   summary: Summary;
-  activity: {
-    total: number;
-    previous: number | null;
-    unit: "hour" | "day" | "month";
-    buckets: Bucket[];
-  };
   // daily seconds from `start` up to today, padded to whole weeks
   calendar: { start: string; days: number[] };
-  // seconds per local hour of day, within the range
-  hours: number[];
-  breakdown: Record<Dimension, Item[]>;
-  files: Item[];
-  // newest first, capped, sessionCount has the full number
+  // latest sessions across all time, newest first, ranges cut them by start
   sessions: Session[];
-  sessionCount: number;
+  ranges: Record<Range, Period>;
 };
 
 /**

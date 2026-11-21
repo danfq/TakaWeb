@@ -1,12 +1,8 @@
 import type { APIRoute } from "astro";
 import { isTimeZone } from "@/lib/server/stats/days";
 import { join } from "@/lib/server/stats/hub";
-import { RANGES, type Filter, type Range, type View } from "@/lib/stats/types";
-
-/**
- * dimensions a view can be filtered by, branches only make sense within a project
- */
-const FILTERABLE = ["project", "language", "editor", "os"] as const;
+import type { View } from "@/lib/stats/types";
+import { readFilter } from "@/lib/stats/view";
 
 /**
  * keep proxies from closing an idle stream
@@ -22,19 +18,10 @@ const HEARTBEAT = 15_000;
  */
 function parseView(params: URLSearchParams): View {
   const tz = params.get("tz") ?? "";
-  const range = params.get("range") as Range;
-  const dimension = params.get("dimension") as Filter["dimension"];
-  const value = params.get("value");
 
   return {
     tz: isTimeZone(tz) ? tz : "UTC",
-    range: RANGES.includes(range) ? range : "week",
-    filter:
-      FILTERABLE.includes(dimension as (typeof FILTERABLE)[number]) &&
-      value !== null &&
-      value.length <= 512
-        ? { dimension, value }
-        : null,
+    filter: readFilter(params),
   };
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Snapshot, Status, View } from "@/lib/stats/types";
+import { writeFilter } from "@/lib/stats/view";
 
 /**
  * retry delay once the browser gives up on a stream
@@ -11,24 +12,23 @@ const RETRY = 3000;
  *
  * @param view view to subscribe to
  *
- * @returns latest snapshot, server status and whether the stream is up
+ * @returns latest snapshot, server status, whether the stream is up and whether the snapshot is for another view
  */
 export function useStream(view: View) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [status, setStatus] = useState<Status>({ state: "connecting" });
   const [connected, setConnected] = useState(true);
 
-  const { tz, range, filter } = view;
+  const { tz, filter } = view;
   const dimension = filter?.dimension;
   const value = filter?.value;
 
   useEffect(() => {
-    const params = new URLSearchParams({ tz, range });
-
-    if (dimension && value !== undefined) {
-      params.set("dimension", dimension);
-      params.set("value", value);
-    }
+    const params = new URLSearchParams({ tz });
+    writeFilter(
+      params,
+      dimension && value !== undefined ? { dimension, value } : null,
+    );
 
     let source: EventSource;
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -75,12 +75,12 @@ export function useStream(view: View) {
       clearTimeout(retry);
       source.close();
     };
-  }, [tz, range, dimension, value]);
+  }, [tz, dimension, value]);
 
-  // a snapshot for a previous view stays up, dimmed, until the new one lands
+  // a snapshot for a previous filter stays up until the new one lands
   const stale =
     !!snapshot &&
-    (snapshot.view.range !== range ||
+    (snapshot.view.tz !== tz ||
       snapshot.view.filter?.dimension !== dimension ||
       snapshot.view.filter?.value !== value);
 

@@ -33,8 +33,8 @@ let unsubscribe: (() => void) | null = null;
  *
  * @returns {string} key
  */
-const keyOf = ({ tz, range, filter }: View): string =>
-  JSON.stringify([tz, range, filter?.dimension, filter?.value]);
+const keyOf = ({ tz, filter }: View): string =>
+  JSON.stringify([tz, filter?.dimension, filter?.value]);
 
 /**
  * recompute a channel and push it when it changed

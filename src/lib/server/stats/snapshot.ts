@@ -1,12 +1,15 @@
-import type {
-  Bucket,
-  Dimension,
-  Item,
-  Latest,
-  Session,
-  Snapshot,
-  Summary,
-  View,
+import {
+  RANGES,
+  type Bucket,
+  type Dimension,
+  type Item,
+  type Latest,
+  type Period,
+  type Range,
+  type Session,
+  type Snapshot,
+  type Summary,
+  type View,
 } from "@/lib/stats/types";
 import {
   dayIndex,
@@ -33,10 +36,13 @@ const SESSION_LIMIT = 100;
  * a range as inclusive day indexes, plus the period before it
  */
 type Window = {
+  range: Range;
   from: number;
   to: number;
   previous: [number, number] | null;
 };
+
+type Spans = Record<Dimension | "file", Map<string, number[]>>;
 
 /**
  * merge overlapping intervals and sum them, mirrors takatime's true duration
@@ -64,25 +70,36 @@ function trueDuration(spans: number[]): number {
 }
 
 /**
- * resolve a view range into day indexes
+ * resolve a range into day indexes
  *
  * @param table day table
- * @param view view
+ * @param range range
  * @param firstActive first day with activity
  *
  * @returns {Window} window
  */
-function window(table: Days, view: View, firstActive: number): Window {
+function window(table: Days, range: Range, firstActive: number): Window {
   const { today } = table;
   const key = table.keys[today];
 
-  switch (view.range) {
+  switch (range) {
     case "today":
-      return { from: today, to: today, previous: [today - 1, today - 1] };
+      return {
+        range,
+        from: today,
+        to: today,
+        previous: [today - 1, today - 1],
+      };
     case "week":
-      return { from: today - 6, to: today, previous: [today - 13, today - 7] };
+      return {
+        range,
+        from: today - 6,
+        to: today,
+        previous: [today - 13, today - 7],
+      };
     case "month":
       return {
+        range,
         from: today - 29,
         to: today,
         previous: [today - 59, today - 30],
@@ -90,13 +107,19 @@ function window(table: Days, view: View, firstActive: number): Window {
     case "year": {
       const from = keyIndex(table, monthStart(key, 11));
       return {
+        range,
         from,
         to: today,
         previous: [keyIndex(table, monthStart(key, 23)), from - 1],
       };
     }
     case "all":
-      return { from: Math.min(firstActive, today), to: today, previous: null };
+      return {
+        range,
+        from: Math.min(firstActive, today),
+        to: today,
+        previous: null,
+      };
   }
 }
 
@@ -118,17 +141,35 @@ function sum(daily: Float64Array, from: number, to: number): number {
 }
 
 /**
+ * local hour of day at an instant
+ *
+ * @param table day table
+ * @param ms epoch ms
+ *
+ * @returns {number} 0 to 23
+ */
+function hourOf(table: Days, ms: number): number {
+  const index = Math.min(
+    Math.max(dayIndex(table, ms), 0),
+    table.offsets.length - 1,
+  );
+  const local = Math.floor((ms + table.offsets[index]) / HOUR);
+
+  return ((local % 24) + 24) % 24;
+}
+
+/**
  * spread merged activity over local days and hours
  *
  * @param list entries ordered by start
  * @param table day table
- * @param range day window
+ * @param froms first day index of each range
  *
- * @returns daily seconds, hour of day seconds in range, hourly seconds today
+ * @returns daily seconds, hour of day seconds per range, hourly seconds today
  */
-function distribute(list: readonly Entry[], table: Days, range: Window) {
+function distribute(list: readonly Entry[], table: Days, froms: number[]) {
   const daily = new Float64Array(table.keys.length);
-  const hours = new Array<number>(24).fill(0);
+  const hours = froms.map(() => new Array<number>(24).fill(0));
   const today = new Array<number>(24).fill(0);
   const { starts, offsets } = table;
 
@@ -150,8 +191,11 @@ function distribute(list: readonly Entry[], table: Days, range: Window) {
       const hour = ((local % 24) + 24) % 24;
 
       daily[index] += seconds;
-      if (index >= range.from) hours[hour] += seconds;
       if (index === table.today) today[hour] += seconds;
+
+      for (let range = 0; range < froms.length; range++) {
+        if (index >= froms[range]) hours[range][hour] += seconds;
+      }
 
       time = end;
       if (time >= starts[index + 1]) index++;
@@ -233,33 +277,34 @@ function summarize(daily: Float64Array, table: Days): Summary {
 }
 
 /**
- * bucket the range for the activity chart
+ * bucket a range for the activity chart
  *
- * @param view view
+ * @param window range window
  * @param daily seconds per day
  * @param todayHours hourly seconds today
  * @param table day table
- * @param range day window
+ * @param now current instant
  *
- * @returns {Snapshot["activity"]} activity
+ * @returns {Period["activity"]} activity
  */
 function activity(
-  view: View,
+  window: Window,
   daily: Float64Array,
   todayHours: number[],
   table: Days,
-  range: Window,
-): Snapshot["activity"] {
-  const total = Math.round(sum(daily, range.from, range.to));
-  const previous = range.previous
-    ? Math.round(sum(daily, range.previous[0], range.previous[1]))
+  now: number,
+): Period["activity"] {
+  const total = Math.round(sum(daily, window.from, window.to));
+  const previous = window.previous
+    ? Math.round(sum(daily, window.previous[0], window.previous[1]))
     : null;
 
-  if (view.range === "today") {
+  if (window.range === "today") {
     return {
       total,
       previous,
       unit: "hour",
+      current: hourOf(table, now),
       buckets: todayHours.map((seconds, hour) => ({
         key: String(hour).padStart(2, "0"),
         seconds: Math.round(seconds),
@@ -267,41 +312,50 @@ function activity(
     };
   }
 
-  if (view.range === "week" || view.range === "month") {
-    const buckets: Bucket[] = [];
-    for (let index = range.from; index <= range.to; index++) {
+  const buckets: Bucket[] = [];
+
+  if (window.range === "week" || window.range === "month") {
+    for (let index = window.from; index <= window.to; index++) {
       buckets.push({
         key: table.keys[index],
         seconds: Math.round(daily[index]),
       });
     }
 
-    return { total, previous, unit: "day", buckets };
+    return {
+      total,
+      previous,
+      unit: "day",
+      current: buckets.length - 1,
+      buckets,
+    };
   }
 
   // months, from the first one in range through the current one
-  const buckets: Bucket[] = [];
-  let month = monthStart(table.keys[Math.max(range.from, 0)]);
-  const last = monthStart(table.keys[range.to]);
+  let month = monthStart(table.keys[Math.max(window.from, 0)]);
+  const last = monthStart(table.keys[window.to]);
 
   for (;;) {
-    const key = month.slice(0, 7);
-    const from = keyIndex(table, month);
     const next = monthStart(month, -1);
-
     const seconds = sum(
       daily,
-      Math.max(from, range.from),
-      Math.min(keyIndex(table, next) - 1, range.to),
+      Math.max(keyIndex(table, month), window.from),
+      Math.min(keyIndex(table, next) - 1, window.to),
     );
 
-    buckets.push({ key, seconds: Math.round(seconds) });
+    buckets.push({ key: month.slice(0, 7), seconds: Math.round(seconds) });
 
     if (month === last) break;
     month = next;
   }
 
-  return { total, previous, unit: "month", buckets };
+  return {
+    total,
+    previous,
+    unit: "month",
+    current: buckets.length - 1,
+    buckets,
+  };
 }
 
 /**
@@ -334,7 +388,7 @@ function rank(groups: Map<string, number[]>, limit = LIST_LIMIT): Item[] {
 }
 
 /**
- * pick the value with the most time
+ * pick the values with the most time
  *
  * @param tally seconds per value
  * @param count how many to keep
@@ -348,23 +402,25 @@ const top = (tally: Map<string, number>, count: number): string[] =>
     .map(([name]) => name);
 
 /**
- * group the range into per dimension rankings and work sessions
+ * per dimension rankings for every range in one pass, plus work sessions
+ * ranges all end now and are nested, so each log lands in a prefix of them
  *
  * @param list entries ordered by start
- * @param from range start ms
- * @param to range end ms
+ * @param froms start of each range, epoch ms
+ * @param to end of today, epoch ms
  *
- * @returns breakdowns, files and sessions
+ * @returns rankings per range and the latest sessions
  */
-function groups(list: readonly Entry[], from: number, to: number) {
-  const dimensions: Record<Dimension | "file", Map<string, number[]>> = {
+function groups(list: readonly Entry[], froms: number[], to: number) {
+  const spans: Spans[] = froms.map(() => ({
     project: new Map(),
     language: new Map(),
     editor: new Map(),
     os: new Map(),
     branch: new Map(),
     file: new Map(),
-  };
+  }));
+  const dimensions = Object.keys(spans[0]) as (Dimension | "file")[];
 
   type Open = Session & {
     languageTally: Map<string, number>;
@@ -387,20 +443,26 @@ function groups(list: readonly Entry[], from: number, to: number) {
     tally.set(key, (tally.get(key) ?? 0) + seconds);
 
   for (const entry of list) {
-    if (entry.end <= from || entry.start >= to) continue;
+    if (entry.start >= to) continue;
 
-    const start = Math.max(entry.start, from);
-    const end = Math.min(entry.end, to);
+    for (let range = 0; range < froms.length; range++) {
+      if (entry.end <= froms[range]) continue;
 
-    for (const dimension of Object.keys(dimensions) as (Dimension | "file")[]) {
-      const map = dimensions[dimension];
-      const spans = map.get(entry[dimension]);
+      const start = Math.max(entry.start, froms[range]);
+      const end = Math.min(entry.end, to);
 
-      if (spans) spans.push(start, end);
-      else map.set(entry[dimension], [start, end]);
+      for (const dimension of dimensions) {
+        const map = spans[range][dimension];
+        const list = map.get(entry[dimension]);
+
+        if (list) list.push(start, end);
+        else map.set(entry[dimension], [start, end]);
+      }
     }
 
     // sessions
+    const { start } = entry;
+    const end = Math.min(entry.end, to);
     let current = open.get(entry.project);
 
     if (!current || start - current.end > SESSION_GAP) {
@@ -432,15 +494,18 @@ function groups(list: readonly Entry[], from: number, to: number) {
   }
 
   return {
-    breakdown: {
-      project: rank(dimensions.project),
-      language: rank(dimensions.language),
-      editor: rank(dimensions.editor),
-      os: rank(dimensions.os),
-      branch: rank(dimensions.branch),
-    },
-    files: rank(dimensions.file, FILE_LIMIT),
-    sessionCount: sessions.length,
+    rankings: spans.map((ranges, index) => ({
+      breakdown: {
+        project: rank(ranges.project),
+        language: rank(ranges.language),
+        editor: rank(ranges.editor),
+        os: rank(ranges.os),
+        branch: rank(ranges.branch),
+      },
+      files: rank(ranges.file, FILE_LIMIT),
+      sessionCount: sessions.filter((session) => session.end > froms[index])
+        .length,
+    })),
     sessions: sessions
       .slice(-SESSION_LIMIT)
       .reverse()
@@ -478,7 +543,7 @@ function latest(list: readonly Entry[]): Latest | null {
 }
 
 /**
- * compute everything the dashboard shows for a view
+ * compute everything the dashboard shows for a view, across every range
  *
  * @param view view
  * @param all every entry, ordered by start
@@ -498,27 +563,44 @@ export function snapshot(
 
   const table = days(view.tz, all[0]?.start ?? now, now);
 
-  // the range only matters for the hour of day split, which "all" starts at 0 anyway
-  const draft = window(table, view, 0);
-  const { daily, hours, today } = distribute(list, table, draft);
+  // "all" covers the whole table for the hour of day split, its real start needs the totals
+  const drafts = RANGES.map((range) => window(table, range, 0));
+  const { daily, hours, today } = distribute(
+    list,
+    table,
+    drafts.map((draft) => draft.from),
+  );
 
   const firstActive = daily.findIndex((seconds) => seconds > 0);
-  const range = window(
-    table,
-    view,
-    firstActive === -1 ? table.today : firstActive,
+  const windows = RANGES.map((range) =>
+    window(table, range, firstActive === -1 ? table.today : firstActive),
   );
+
+  const end = table.starts[table.today + 1];
+  const froms = windows.map((window) => table.starts[Math.max(window.from, 0)]);
+  const { rankings, sessions } = groups(list, froms, end);
 
   // the calendar starts on a sunday, a year back
   const yearAgo = table.today - 364;
   const calendarStart = yearAgo - weekday(table.keys[yearAgo]);
+
+  const ranges = Object.fromEntries(
+    windows.map((window, index) => [
+      window.range,
+      {
+        start: froms[index],
+        activity: activity(window, daily, today, table, now),
+        hours: hours[index].map(Math.round),
+        ...rankings[index],
+      },
+    ]),
+  ) as Record<Range, Period>;
 
   return {
     view,
     empty: all.length === 0,
     latest: latest(all),
     summary: summarize(daily, table),
-    activity: activity(view, daily, today, table, range),
     calendar: {
       start: table.keys[calendarStart],
       days: Array.from(
@@ -526,11 +608,7 @@ export function snapshot(
         Math.round,
       ),
     },
-    hours: hours.map(Math.round),
-    ...groups(
-      list,
-      table.starts[Math.max(range.from, 0)],
-      table.starts[range.to + 1],
-    ),
+    sessions,
+    ranges,
   };
 }
