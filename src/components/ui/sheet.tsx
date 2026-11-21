@@ -64,8 +64,11 @@ function useSheetWidth(storageKey: string | undefined, defaultWidth: number) {
   React.useEffect(() => {
     if (!storageKey) return
 
-    const stored = Number(localStorage.getItem(storageKey))
-    if (stored) setWidth(clampWidth(stored))
+    // blocked storage throws, the default width stays
+    try {
+      const stored = Number(localStorage.getItem(storageKey))
+      if (stored) setWidth(clampWidth(stored))
+    } catch {}
   }, [storageKey])
 
   const store = React.useCallback(
