@@ -18,6 +18,8 @@ import {
   days,
   keyIndex,
   monthStart,
+  nextShift,
+  offsetIn,
   weekday,
   type Days,
 } from "./days";
@@ -155,7 +157,7 @@ function hourOf(table: Days, ms: number): number {
     Math.max(dayIndex(table, ms), 0),
     table.offsets.length - 1,
   );
-  const local = Math.floor((ms + table.offsets[index]) / HOUR);
+  const local = Math.floor((ms + offsetIn(table, index, ms)) / HOUR);
 
   return ((local % 24) + 24) % 24;
 }
@@ -179,7 +181,7 @@ function distribute(
   const daily = new Float64Array(table.keys.length);
   const hours = bounds.map(() => new Array<number>(24).fill(0));
   const focused = new Array<number>(24).fill(0);
-  const { starts, offsets } = table;
+  const { starts } = table;
 
   /**
    * split one merged interval at local day and hour boundaries
@@ -192,9 +194,15 @@ function distribute(
     let index = dayIndex(table, time);
 
     while (time < to && index < daily.length) {
-      const offset = offsets[index];
+      // segments never cross a dst switch, so one offset holds for each
+      const offset = offsetIn(table, index, time);
       const local = Math.floor((time + offset) / HOUR);
-      const end = Math.min(to, starts[index + 1], (local + 1) * HOUR - offset);
+      const end = Math.min(
+        to,
+        starts[index + 1],
+        (local + 1) * HOUR - offset,
+        nextShift(table, index, time),
+      );
       const seconds = (end - time) / 1000;
       const hour = ((local % 24) + 24) % 24;
 
