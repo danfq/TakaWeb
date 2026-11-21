@@ -40,6 +40,10 @@ type CalendarProps = {
   days: number[];
   hovered: string | null;
   onHover: (key: string | null) => void;
+  // days become buttons when set
+  onSelect?: (key: string) => void;
+  // day whose details are open
+  selected?: string | null;
 };
 
 /**
@@ -50,6 +54,8 @@ export default function Calendar({
   days,
   hovered,
   onHover,
+  onSelect,
+  selected = null,
 }: CalendarProps) {
   const { locale } = useLocale();
   const weeks = Math.ceil(days.length / 7);
@@ -109,20 +115,37 @@ export default function Calendar({
         {days.map((seconds, index) => {
           const key = addDays(start, index);
 
-          return (
-            <span
+          const props = {
+            className: cn(
+              "aspect-square rounded-[3px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              LEVELS[level(seconds)],
+              (hovered === key || selected === key) &&
+                "ring-2 ring-foreground/60",
+            ),
+            style: {
+              gridColumn: Math.floor(index / 7) + 2,
+              gridRow: (index % 7) + 1,
+            },
+            onMouseEnter: () => onHover(key),
+          };
+
+          return onSelect ? (
+            <button
               key={key}
-              className={cn(
-                "aspect-square rounded-[3px] transition-colors",
-                LEVELS[level(seconds)],
-                hovered === key && "ring-2 ring-foreground/60",
-              )}
-              style={{
-                gridColumn: Math.floor(index / 7) + 2,
-                gridRow: (index % 7) + 1,
-              }}
-              onMouseEnter={() => onHover(key)}
+              type="button"
+              aria-label={day(key, locale, {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
+              aria-pressed={selected === key}
+              onFocus={() => onHover(key)}
+              onBlur={() => onHover(null)}
+              onClick={() => onSelect(key)}
+              {...props}
             />
+          ) : (
+            <span key={key} {...props} />
           );
         })}
       </div>
