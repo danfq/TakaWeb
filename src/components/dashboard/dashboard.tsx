@@ -137,7 +137,10 @@ function Board({
   const [languageTab, setLanguageTab] = useState("language");
 
   const { breakdown, files, sessionCount, start } = snapshot.ranges[range];
-  const sessions = snapshot.sessions.filter((session) => session.end > start);
+  // a session belongs to the range it started in
+  const sessions = snapshot.sessions.filter(
+    (session) => session.start >= start,
+  );
 
   // branches only mean something inside one project
   const byProject = filter?.dimension === "project" ? filter.value : undefined;

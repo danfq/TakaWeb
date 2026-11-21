@@ -534,7 +534,8 @@ function groups(list: readonly Entry[], froms: number[], to: number) {
         branch: rank(ranges.branch),
       },
       files: rank(ranges.file, FILE_LIMIT),
-      sessionCount: sessions.filter((session) => session.end > froms[index])
+      // a session counts towards the range it started in
+      sessionCount: sessions.filter((session) => session.start >= froms[index])
         .length,
     })),
     sessions: sessions.slice(-SESSION_LIMIT).reverse().map(finish),
@@ -738,7 +739,8 @@ export function detail(
     buckets,
     hours: hours[0].map(Math.round),
     ...rankings[0],
-    sessions: sessions.filter((session) => session.end > fromMs),
+    // a session belongs to the period it started in
+    sessions: sessions.filter((session) => session.start >= fromMs),
     longest: longest[0],
     first: first === null ? null : Math.round(first),
     last: last === null ? null : Math.round(last),
