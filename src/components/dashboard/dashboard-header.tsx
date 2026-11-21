@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import LogoutButton from "@/components/auth/logout-button";
 import Brand from "@/components/layout/brand";
+import SettingsSheet from "@/components/settings/settings-sheet";
 import ThemePicker from "@/components/theme/theme-picker";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -136,18 +137,16 @@ export default function DashboardHeader({
 }: DashboardHeaderProps) {
   const FilterIcon = filter ? FILTER_ICONS[filter.dimension] : null;
 
-  // mobile stacks brand and actions over status and range, wider screens use one row
+  // mobile stacks brand and actions over status and range,
+  // wider screens use one row with the range centered between equal sides
   return (
-    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 px-4 pt-4 pb-3 sm:flex sm:gap-x-4 lg:px-6 lg:pt-5 lg:pb-4">
-      <Brand />
+    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 pt-4 pb-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-4 lg:px-6 lg:pt-5 lg:pb-4">
+      <div className="flex min-w-0 items-center gap-4 max-sm:contents">
+        <div className="max-sm:col-start-1 max-sm:row-start-1">
+          <Brand />
+        </div>
 
-      <div className="flex items-center gap-1 sm:order-last">
-        <ThemePicker />
-        <LogoutButton />
-      </div>
-
-      <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-2 sm:contents">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2 max-sm:col-start-1 max-sm:row-start-2">
           <LiveIndicator {...live} />
 
           {filter && FilterIcon && (
@@ -166,26 +165,32 @@ export default function DashboardHeader({
             </Button>
           )}
         </div>
+      </div>
 
-        <ToggleGroup
-          aria-label="Range"
-          spacing={0}
-          className="shrink-0 rounded-full bg-muted p-1"
-          value={[range]}
-          onValueChange={(value) => value[0] && onRange(value[0] as Range)}
-        >
-          {RANGE_OPTIONS.map((option) => (
-            <ToggleGroupItem
-              key={option.value}
-              value={option.value}
-              aria-label={option.label}
-              className="h-7! min-w-0 rounded-full! px-2.5! text-xs text-muted-foreground aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm dark:aria-pressed:bg-input/40"
-            >
-              <span className="lg:hidden">{option.short}</span>
-              <span className="hidden lg:inline">{option.label}</span>
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+      <ToggleGroup
+        aria-label="Range"
+        spacing={0}
+        className="shrink-0 justify-self-center rounded-full bg-muted p-1 max-sm:col-start-2 max-sm:row-start-2"
+        value={[range]}
+        onValueChange={(value) => value[0] && onRange(value[0] as Range)}
+      >
+        {RANGE_OPTIONS.map((option) => (
+          <ToggleGroupItem
+            key={option.value}
+            value={option.value}
+            aria-label={option.label}
+            className="h-7! min-w-0 rounded-full! px-2.5! text-xs text-muted-foreground aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm dark:aria-pressed:bg-input/40"
+          >
+            <span className="lg:hidden">{option.short}</span>
+            <span className="hidden lg:inline">{option.label}</span>
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+
+      <div className="flex items-center justify-self-end gap-1 max-sm:col-start-2 max-sm:row-start-1">
+        <ThemePicker />
+        <SettingsSheet />
+        <LogoutButton />
       </div>
     </header>
   );

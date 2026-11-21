@@ -116,6 +116,37 @@ export type Snapshot = {
 };
 
 /**
+ * a span of whole local days, both ends included
+ */
+export type PeriodRange = { from: string; to: string };
+
+/**
+ * detailed insights for one period, opened from the charts
+ */
+export type Detail = PeriodRange & {
+  view: View;
+  // hours for a single day, days otherwise
+  unit: "hour" | "day";
+  total: number;
+  // the same span right before, or the previous month for whole months
+  previous: number;
+  activeDays: number;
+  days: number;
+  buckets: Bucket[];
+  // seconds per local hour of day
+  hours: number[];
+  breakdown: Record<Dimension, Item[]>;
+  files: Item[];
+  // newest first, capped, sessionCount has the full number
+  sessions: Session[];
+  sessionCount: number;
+  longest: Session | null;
+  // first and last coded moment, epoch ms
+  first: number | null;
+  last: number | null;
+};
+
+/**
  * connection state of the server side data source
  */
 export type Status =

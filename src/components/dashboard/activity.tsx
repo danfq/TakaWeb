@@ -14,7 +14,22 @@ import Calendar from "@/components/dashboard/calendar";
 import { SectionBody, TabbedSection } from "@/components/dashboard/section";
 import { change, day, duration } from "@/lib/stats/format";
 import { useLocale } from "@/components/dashboard/locale";
-import type { Bucket, Period, Range, Snapshot } from "@/lib/stats/types";
+import { dayPeriod, monthPeriod, samePeriod } from "@/lib/stats/period";
+import type {
+  Bucket,
+  Period,
+  PeriodRange,
+  Range,
+  Snapshot,
+} from "@/lib/stats/types";
+
+/**
+ * the period whose details are open, and a way to open another
+ */
+type Selection = {
+  selected: PeriodRange | null;
+  onOpen: (period: PeriodRange) => void;
+};
 
 type Unit = Period["activity"]["unit"];
 
@@ -156,7 +171,9 @@ function Timeline({
   period,
   range,
   live,
-}: {
+  selected,
+  onOpen,
+}: Selection & {
   period: Period;
   range: Range;
   live: boolean;
@@ -165,6 +182,19 @@ function Timeline({
   const { locale } = useLocale();
   const { activity } = period;
   const bucket = hovered === null ? null : activity.buckets[hovered];
+
+  // days and months open their details, today's hours already are the details
+  const toPeriod =
+    activity.unit === "day"
+      ? (bucket: Bucket) => dayPeriod(bucket.key)
+      : activity.unit === "month"
+        ? (bucket: Bucket) => monthPeriod(bucket.key)
+        : null;
+  const open = toPeriod
+    ? activity.buckets.findIndex((bucket) =>
+        samePeriod(toPeriod(bucket), selected),
+      )
+    : -1;
 
   return (
     <>
@@ -197,6 +227,13 @@ function Timeline({
           hovered={hovered}
           onHover={setHovered}
           live={live}
+          selected={open === -1 ? null : open}
+          describe={(bucket) => describe(activity.unit, bucket, locale)}
+          onSelect={
+            toPeriod
+              ? (index) => onOpen(toPeriod(activity.buckets[index]))
+              : undefined
+          }
         />
       </SectionBody>
     </>
@@ -206,7 +243,11 @@ function Timeline({
 /**
  * a year of days, takatime's contribution graph
  */
-function YearGraph({ snapshot }: { snapshot: Snapshot }) {
+function YearGraph({
+  snapshot,
+  selected,
+  onOpen,
+}: Selection & { snapshot: Snapshot }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const { locale } = useLocale();
   const { calendar, summary } = snapshot;
@@ -238,6 +279,8 @@ function YearGraph({ snapshot }: { snapshot: Snapshot }) {
           days={calendar.days}
           hovered={hovered}
           onHover={setHovered}
+          selected={selected?.from === selected?.to ? selected?.from : null}
+          onSelect={(key) => onOpen(dayPeriod(key))}
         />
       </SectionBody>
     </>
@@ -245,12 +288,13 @@ function YearGraph({ snapshot }: { snapshot: Snapshot }) {
 }
 
 /**
- * when in the day the coding happens, with takatime's persona
+ * split hour of day seconds into takatime's parts of the day
+ *
+ * @param hours seconds per hour of day
+ *
+ * @returns parts with their seconds, the busiest one and the total
  */
-function Hours({ period, range }: { period: Period; range: Range }) {
-  const [hovered, setHovered] = useState<number | null>(null);
-  const { hours } = period;
-
+export function dayParts(hours: number[]) {
   const total = hours.reduce((sum, seconds) => sum + seconds, 0);
   const parts = PARTS.map((part) => ({
     ...part,
@@ -261,6 +305,55 @@ function Hours({ period, range }: { period: Period; range: Range }) {
   const top = parts.reduce((best, part) =>
     part.seconds > best.seconds ? part : best,
   );
+
+  return { parts, top, total };
+}
+
+/**
+ * morning, afternoon, evening and night with share bars
+ */
+export function DayParts({
+  hours,
+  className,
+}: {
+  hours: number[];
+  className?: string;
+}) {
+  const { parts, top, total } = dayParts(hours);
+
+  return (
+    <div className={cn("grid shrink-0 grid-cols-2 gap-x-4 gap-y-3", className)}>
+      {parts.map(({ label, icon: Icon, seconds }) => (
+        <div key={label} className="min-w-0">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Icon className="size-3.5" />
+            {label}
+          </div>
+          <div className="mt-0.5 text-sm font-medium tabular-nums">
+            {duration(seconds)}
+          </div>
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn(
+                "h-full rounded-full bg-primary transition-[width] duration-500",
+                label !== top.label && "opacity-55",
+              )}
+              style={{ width: `${total ? (seconds / total) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * when in the day the coding happens, with takatime's persona
+ */
+function Hours({ period, range }: { period: Period; range: Range }) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const { hours } = period;
+  const { top, total } = dayParts(hours);
 
   const buckets = hours.map((seconds, hour) => ({
     key: String(hour).padStart(2, "0"),
@@ -295,28 +388,7 @@ function Hours({ period, range }: { period: Period; range: Range }) {
           onHover={setHovered}
         />
 
-        <div className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
-          {parts.map(({ label, icon: Icon, seconds }) => (
-            <div key={label} className="min-w-0">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Icon className="size-3.5" />
-                {label}
-              </div>
-              <div className="mt-0.5 text-sm font-medium tabular-nums">
-                {duration(seconds)}
-              </div>
-              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={cn(
-                    "h-full rounded-full bg-primary transition-[width] duration-500",
-                    label !== top.label && "opacity-55",
-                  )}
-                  style={{ width: `${total ? (seconds / total) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
+        <DayParts hours={hours} className="sm:grid-cols-4" />
       </SectionBody>
     </>
   );
@@ -329,8 +401,10 @@ export default function Activity({
   snapshot,
   range,
   live,
+  selected,
+  onOpen,
   className,
-}: {
+}: Selection & {
   snapshot: Snapshot;
   range: Range;
   live: boolean;
@@ -349,12 +423,26 @@ export default function Activity({
         {
           value: "timeline",
           label: "Timeline",
-          content: <Timeline period={period} range={range} live={live} />,
+          content: (
+            <Timeline
+              period={period}
+              range={range}
+              live={live}
+              selected={selected}
+              onOpen={onOpen}
+            />
+          ),
         },
         {
           value: "calendar",
           label: "Calendar",
-          content: <YearGraph snapshot={snapshot} />,
+          content: (
+            <YearGraph
+              snapshot={snapshot}
+              selected={selected}
+              onOpen={onOpen}
+            />
+          ),
         },
         {
           value: "hours",

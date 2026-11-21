@@ -8,6 +8,8 @@ export type Days = {
   starts: number[];
   // local minus utc at each midnight, in ms
   offsets: number[];
+  // days whose offset changes, such as dst switches, with when and to what
+  shifts: Map<number, { at: number; offset: number }>;
   // index of the current day
   today: number;
 };
@@ -127,6 +129,7 @@ function build(tz: string, from: number, now: number): Days {
   const keys: string[] = [];
   const starts: number[] = [];
   const offsets: number[] = [];
+  const shifts: Days["shifts"] = new Map();
 
   for (let index = 0; index <= count; index++) {
     const utc = firstUtc + index * DAY;
@@ -143,7 +146,55 @@ function build(tz: string, from: number, now: number): Days {
     }
   }
 
-  return { keys, starts, offsets, today: count - 1 };
+  // find the exact instant of every offset change, to the second
+  for (let index = 0; index < count; index++) {
+    const after = offsetAt(tz, starts[index + 1] - 1000);
+    if (after === offsets[index]) continue;
+
+    let low = starts[index];
+    let high = starts[index + 1] - 1000;
+
+    while (high - low > 1000) {
+      const middle = low + Math.floor((high - low) / 2000) * 1000;
+
+      if (offsetAt(tz, middle) === offsets[index]) low = middle;
+      else high = middle;
+    }
+
+    shifts.set(index, { at: high, offset: after });
+  }
+
+  return { keys, starts, offsets, shifts, today: count - 1 };
+}
+
+/**
+ * offset in effect at an instant within a day
+ *
+ * @param table day table
+ * @param index day index
+ * @param ms epoch ms within that day
+ *
+ * @returns {number} local minus utc, in ms
+ */
+export function offsetIn(table: Days, index: number, ms: number): number {
+  const shift = table.shifts.get(index);
+
+  return shift && ms >= shift.at ? shift.offset : table.offsets[index];
+}
+
+/**
+ * next offset change within a day after an instant
+ *
+ * @param table day table
+ * @param index day index
+ * @param ms epoch ms within that day
+ *
+ * @returns {number} epoch ms of the change, infinity when there is none
+ */
+export function nextShift(table: Days, index: number, ms: number): number {
+  const shift = table.shifts.get(index);
+
+  return shift && ms < shift.at ? shift.at : Infinity;
 }
 
 /**

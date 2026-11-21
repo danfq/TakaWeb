@@ -38,6 +38,12 @@ type BarChartProps = {
   onHover: (index: number | null) => void;
   // pulse the current bar while coding
   live?: boolean;
+  // bars become buttons when set
+  onSelect?: (index: number) => void;
+  // bucket whose details are open
+  selected?: number | null;
+  // accessible name for a selectable bar
+  describe?: (bucket: Bucket) => string;
   className?: string;
 };
 
@@ -51,10 +57,16 @@ export default function BarChart({
   hovered,
   onHover,
   live,
+  onSelect,
+  selected = null,
+  describe,
   className,
 }: BarChartProps) {
   const max = niceMax(Math.max(0, ...buckets.map((bucket) => bucket.seconds)));
   const dense = buckets.length > 20;
+
+  // hovering wins, then the open bucket, then the current one
+  const focus = hovered ?? selected;
 
   return (
     <div
@@ -84,20 +96,16 @@ export default function BarChart({
             dense ? "gap-0.5" : "gap-1.5",
           )}
         >
-          {buckets.map((bucket, index) => (
-            <div
-              key={bucket.key}
-              className="flex h-full min-w-0 flex-1 items-end"
-              onMouseEnter={() => onHover(index)}
-            >
+          {buckets.map((bucket, index) => {
+            const bar = (
               <div
                 className={cn(
                   "w-full rounded-t-[min(6px,30%)] bg-primary transition-[height,opacity] duration-500 ease-out",
-                  hovered === null
+                  focus === null
                     ? index === current
                       ? "opacity-100"
                       : "opacity-55"
-                    : hovered === index
+                    : focus === index
                       ? "opacity-100"
                       : "opacity-35",
                   live && index === current && "animate-pulse",
@@ -107,8 +115,32 @@ export default function BarChart({
                   minHeight: bucket.seconds > 0 ? 2 : 0,
                 }}
               />
-            </div>
-          ))}
+            );
+
+            return onSelect ? (
+              <button
+                key={bucket.key}
+                type="button"
+                aria-label={describe?.(bucket)}
+                aria-pressed={selected === index}
+                className="flex h-full min-w-0 flex-1 items-end rounded-t-md outline-none"
+                onMouseEnter={() => onHover(index)}
+                onFocus={() => onHover(index)}
+                onBlur={() => onHover(null)}
+                onClick={() => onSelect(index)}
+              >
+                {bar}
+              </button>
+            ) : (
+              <div
+                key={bucket.key}
+                className="flex h-full min-w-0 flex-1 items-end"
+                onMouseEnter={() => onHover(index)}
+              >
+                {bar}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -119,7 +151,7 @@ export default function BarChart({
             key={bucket.key}
             className={cn(
               "min-w-0 flex-1 overflow-visible text-center text-[10px] whitespace-nowrap text-muted-foreground tabular-nums",
-              (index === current || index === hovered) && "text-foreground",
+              (index === current || index === focus) && "text-foreground",
             )}
           >
             {tick(bucket, index)}

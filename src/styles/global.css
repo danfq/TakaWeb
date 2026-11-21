@@ -121,10 +121,31 @@
   * {
     @apply border-border outline-ring/50;
     }
+  /* no focus rings from clicks or restored focus, see the keyboard rule below */
+  :focus,
+  :focus-visible {
+    outline: none;
+    }
   body {
     @apply bg-background text-foreground;
     }
-  button:not(:disabled), [role="button"]:not(:disabled) {
+  /* anything interactive shows the pointer, unless disabled */
+  :is(
+      a[href],
+      button,
+      summary,
+      select,
+      label[for],
+      [role="button"],
+      [role="tab"],
+      [role="menuitem"],
+      [role="menuitemradio"],
+      [role="menuitemcheckbox"],
+      [role="option"],
+      [role="switch"],
+      [role="checkbox"],
+      [role="radio"]
+    ):not(:disabled, [aria-disabled="true"], [data-disabled]) {
     cursor: pointer;
     }
   html {
@@ -133,4 +154,14 @@
   h1, h2, h3, h4, h5, h6 {
     @apply font-heading;
     }
+}
+
+/*
+ * keyboard navigation gets a focus outline, set by the focus script in the main layout
+ * any focus counts here, browsers skip :focus-visible after shortcuts like cmd+,
+ * unlayered so component utilities such as outline-none cannot hide it
+ */
+[data-focus="keyboard"] :focus {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
 }

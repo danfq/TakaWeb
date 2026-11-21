@@ -4,12 +4,20 @@ import { Database, Radio, type LucideIcon } from "lucide-react";
 import Activity from "@/components/dashboard/activity";
 import DashboardHeader from "@/components/dashboard/dashboard-header";
 import { LocaleProvider } from "@/components/dashboard/locale";
+import PeriodSheet from "@/components/dashboard/period-sheet";
 import Ranking, { rankColor } from "@/components/dashboard/ranking";
 import { SectionBody, TabbedSection } from "@/components/dashboard/section";
 import Sessions from "@/components/dashboard/sessions";
 import Summary from "@/components/dashboard/summary";
 import { useStream } from "@/components/dashboard/use-stream";
-import type { Filter, Range, Snapshot, Status } from "@/lib/stats/types";
+import { dayKey } from "@/lib/stats/format";
+import type {
+  Filter,
+  PeriodRange,
+  Range,
+  Snapshot,
+  Status,
+} from "@/lib/stats/types";
 import { RANGE_COOKIE, writeFilter } from "@/lib/stats/view";
 
 /**
@@ -112,6 +120,8 @@ function Board({
   now,
   filter,
   onFilter,
+  selected,
+  onOpen,
 }: {
   snapshot: Snapshot;
   range: Range;
@@ -119,13 +129,18 @@ function Board({
   now: number;
   filter: Filter | null;
   onFilter: (filter: Filter | null) => void;
+  selected: PeriodRange | null;
+  onOpen: (period: PeriodRange) => void;
 }) {
   const [section, setSection] = useState<SectionName>("activity");
   const [projectTab, setProjectTab] = useState("project");
   const [languageTab, setLanguageTab] = useState("language");
 
   const { breakdown, files, sessionCount, start } = snapshot.ranges[range];
-  const sessions = snapshot.sessions.filter((session) => session.end > start);
+  // a session belongs to the range it started in
+  const sessions = snapshot.sessions.filter(
+    (session) => session.start >= start,
+  );
 
   // branches only mean something inside one project
   const byProject = filter?.dimension === "project" ? filter.value : undefined;
@@ -169,6 +184,8 @@ function Board({
           snapshot={snapshot}
           range={range}
           live={live}
+          selected={selected}
+          onOpen={onOpen}
           className={place("activity", "lg:border-b")}
         />
 
@@ -277,6 +294,8 @@ export default function Dashboard(initial: DashboardProps) {
   const [range, setRange] = useState(initial.range);
   const [filter, setFilter] = useState(initial.filter);
   const [tz, setTz] = useState(initial.tz);
+  // periods open in the details sheet, drilled into from left to right
+  const [periods, setPeriods] = useState<PeriodRange[]>([]);
 
   const { snapshot, status, connected, stale } = useStream(
     { tz, filter },
@@ -351,6 +370,8 @@ export default function Dashboard(initial: DashboardProps) {
               now={now}
               filter={filter}
               onFilter={changeFilter}
+              selected={periods[0] ?? null}
+              onOpen={(period) => setPeriods([period])}
             />
           )}
         </div>
@@ -378,6 +399,15 @@ export default function Dashboard(initial: DashboardProps) {
         <main className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4 lg:gap-4 lg:px-6 lg:pb-6">
           {content}
         </main>
+
+        <PeriodSheet
+          periods={periods}
+          onPeriods={setPeriods}
+          view={{ tz, filter }}
+          revision={snapshot}
+          today={dayKey(now, tz)}
+          now={now}
+        />
       </div>
     </LocaleProvider>
   );
