@@ -8,7 +8,8 @@ services:
       mongo-init:
         condition: "service_completed_successfully"
     environment:
-      MONGO_URI: "mongodb://${MONGO_READONLY_USERNAME:-takaweb}:${MONGO_READONLY_PASSWORD:?set MONGO_READONLY_PASSWORD}@mongo:27017/takatime?authSource=admin"
+      # direct, so the replica set member address meant for editors does not matter here
+      MONGO_URI: "mongodb://${MONGO_READONLY_USERNAME:-takaweb}:${MONGO_READONLY_PASSWORD:?set MONGO_READONLY_PASSWORD}@mongo:${MONGO_PORT:-27017}/takatime?authSource=admin&directConnection=true"
       TAKAWEB_URL: "${TAKAWEB_URL:-http://localhost:4321}"
       TAKAWEB_DATA_DIR: "/data"
     ports:
@@ -21,18 +22,31 @@ services:
       timeout: "5s"
       retries: 3
 
+  # a single node replica set, change streams (live updates) only exist on replica sets
   mongo:
     image: "mongo:8"
     restart: "unless-stopped"
     environment:
       MONGO_INITDB_ROOT_USERNAME: "${MONGO_USERNAME:-takatime}"
       MONGO_INITDB_ROOT_PASSWORD: "${MONGO_PASSWORD:?set MONGO_PASSWORD}"
+    # replica sets with auth need a keyfile, a lone member never shares it so a fresh one per start is fine
+    entrypoint:
+      - "bash"
+      - "-c"
+      - |
+        openssl rand -base64 756 > /tmp/mongo-keyfile
+        chmod 400 /tmp/mongo-keyfile
+        chown mongodb:mongodb /tmp/mongo-keyfile
+        exec docker-entrypoint.sh "$$@"
+      - "mongo"
+    # listens on the published port, the member address editors are handed back must match it
+    command: ["--replSet", "rs0", "--keyFile", "/tmp/mongo-keyfile", "--port", "${MONGO_PORT:-27017}"]
     ports:
-      - "${MONGO_BIND:-127.0.0.1}:${MONGO_PORT:-27017}:27017"
+      - "${MONGO_BIND:-127.0.0.1}:${MONGO_PORT:-27017}:${MONGO_PORT:-27017}"
     volumes:
       - "mongo-data:/data/db"
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD", "mongosh", "--port", "${MONGO_PORT:-27017}", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: "10s"
       timeout: "5s"
       retries: 5
@@ -49,6 +63,8 @@ services:
       MONGO_PASSWORD: "${MONGO_PASSWORD:?set MONGO_PASSWORD}"
       MONGO_READONLY_USERNAME: "${MONGO_READONLY_USERNAME:-takaweb}"
       MONGO_READONLY_PASSWORD: "${MONGO_READONLY_PASSWORD:?set MONGO_READONLY_PASSWORD}"
+      MONGO_PORT: "${MONGO_PORT:-27017}"
+      MONGO_PUBLIC_HOST: "${MONGO_PUBLIC_HOST:-127.0.0.1}"
     configs:
       - source: "mongo-readonly-user"
         target: "/mongo-readonly-user.js"
@@ -57,7 +73,7 @@ services:
 configs:
   mongo-readonly-user:
     content: |
-      // create or sync the read-only user takaweb connects with, safe to run on every start
+      // set up the replica set and the read-only user takaweb connects with, safe to run on every start
       const env = process.env;
       const user = env.MONGO_READONLY_USERNAME;
 
@@ -66,12 +82,44 @@ configs:
         throw new Error("MONGO_READONLY_USERNAME must be set and differ from MONGO_USERNAME");
       }
 
+      // direct, the member is not reachable under its own address before the set exists
       const admin = connect(
         "mongodb://" +
           encodeURIComponent(env.MONGO_USERNAME) + ":" +
           encodeURIComponent(env.MONGO_PASSWORD) +
-          "@mongo:27017/admin?authSource=admin",
+          "@mongo:" + env.MONGO_PORT + "/admin?authSource=admin&directConnection=true",
       );
+
+      // the address editors get back from mongo and reconnect to
+      const host = env.MONGO_PUBLIC_HOST + ":" + env.MONGO_PORT;
+      let status;
+      try {
+        status = admin.adminCommand({ replSetGetStatus: 1 });
+      } catch (error) {
+        status = { ok: 0, codeName: error.codeName, errmsg: error.message };
+      }
+
+      if (status.ok) {
+        const { config } = admin.adminCommand({ replSetGetConfig: 1 });
+
+        if (config.members[0].host !== host) {
+          config.members[0].host = host;
+          config.version++;
+          admin.adminCommand({ replSetReconfig: config, force: true });
+          print("moved replica set member to " + host);
+        }
+      } else if (status.codeName === "NotYetInitialized") {
+        admin.adminCommand({ replSetInitiate: { _id: "rs0", members: [{ _id: 0, host: host }] } });
+        print("initiated replica set at " + host);
+      } else {
+        throw new Error("unexpected replica set status: " + status.errmsg);
+      }
+
+      // users can only be written once this member is primary
+      for (let attempt = 0; !admin.adminCommand({ hello: 1 }).isWritablePrimary; attempt++) {
+        if (attempt === 60) throw new Error("replica set never elected a primary");
+        sleep(500);
+      }
 
       const options = {
         pwd: env.MONGO_READONLY_PASSWORD,
