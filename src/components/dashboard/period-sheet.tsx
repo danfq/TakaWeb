@@ -443,17 +443,26 @@ export default function PeriodSheet({
 }) {
   const { locale } = useLocale();
   const period = periods.at(-1) ?? null;
-  const live = !!period && period.to >= today;
 
-  const { detail, failed } = useDetail(view, period, live ? revision : null);
+  // refresh with each live snapshot while the requested period includes today
+  const { detail, current, failed, retry } = useDetail(
+    view,
+    period,
+    !!period && period.to >= today ? revision : null,
+  );
 
-  // the last loaded detail stays up while the next one loads
-  const loading =
-    !!period &&
-    (!detail || detail.from !== period.from || detail.to !== period.to);
+  // label everything after what is on screen: the loaded detail, or the request
+  // when nothing matching loaded, so old numbers never sit under a new title or filter
+  const showsRequest = failed ? !current : !detail;
+  const shown: PeriodRange & { view: View } =
+    showsRequest || !detail
+      ? { from: period?.from ?? "", to: period?.to ?? "", view }
+      : detail;
+  const pending = !current && !failed;
+  const live = !!period && shown.to >= today;
 
-  const filter = view.filter
-    ? `${label(view.filter.dimension, view.filter.value)} only`
+  const filter = shown.view.filter
+    ? `${label(shown.view.filter.dimension, shown.view.filter.value)} only`
     : "Everything";
 
   return (
@@ -486,9 +495,9 @@ export default function PeriodSheet({
                   </Button>
                 )}
                 <SheetTitle className="truncate text-lg">
-                  {title(period, locale)}
+                  {title(shown, locale)}
                 </SheetTitle>
-                {loading && detail && (
+                {pending && detail && (
                   <Spinner className="size-3.5 text-muted-foreground" />
                 )}
               </div>
@@ -506,14 +515,17 @@ export default function PeriodSheet({
             </SheetHeader>
 
             <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
-              {failed && !detail ? (
-                <p className="px-6 py-10 text-center text-sm text-muted-foreground">
+              {failed && !current ? (
+                <div className="flex flex-col items-center gap-3 px-6 py-10 text-center text-sm text-muted-foreground">
                   Could not load this period
-                </p>
+                  <Button variant="secondary" size="sm" onClick={retry}>
+                    Try again
+                  </Button>
+                </div>
               ) : detail ? (
                 <Insights
                   detail={detail}
-                  view={view}
+                  view={detail.view}
                   now={now}
                   onPeriod={(next) => onPeriods([...periods, next])}
                 />
