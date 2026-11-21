@@ -124,7 +124,23 @@
   body {
     @apply bg-background text-foreground;
     }
-  button:not(:disabled), [role="button"]:not(:disabled) {
+  /* anything interactive shows the pointer, unless disabled */
+  :is(
+      a[href],
+      button,
+      summary,
+      select,
+      label[for],
+      [role="button"],
+      [role="tab"],
+      [role="menuitem"],
+      [role="menuitemradio"],
+      [role="menuitemcheckbox"],
+      [role="option"],
+      [role="switch"],
+      [role="checkbox"],
+      [role="radio"]
+    ):not(:disabled, [aria-disabled="true"], [data-disabled]) {
     cursor: pointer;
     }
   html {
