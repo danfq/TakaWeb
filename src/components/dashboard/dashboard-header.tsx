@@ -65,6 +65,10 @@ function LiveIndicator({
   } else if (status.state === "error") {
     dot = "bg-destructive";
     text = status.message;
+  } else if (status.state === "unsupported") {
+    dot = "bg-amber-500";
+    text = "Live updates off";
+    detail = "MongoDB must run as a replica set";
   } else if (loading) {
     text = "Connecting";
   } else if (latest && live) {

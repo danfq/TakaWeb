@@ -104,6 +104,8 @@ export type Snapshot = {
  */
 export type Status =
   | { state: "connecting" }
-  | { state: "ready"; mode: "stream" | "poll" }
+  | { state: "ready" }
+  // the server cannot push changes, mongo has to run as a replica set
+  | { state: "unsupported" }
   | { state: "error"; message: string }
   | { state: "unconfigured" };

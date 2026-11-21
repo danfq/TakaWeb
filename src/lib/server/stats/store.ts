@@ -28,17 +28,12 @@ type Data = {
   sorted: boolean;
 };
 
-/**
- * how often the poll fallback checks for new logs
- */
-const POLL_INTERVAL = 2000;
-
-/**
- * full reload cadence in poll mode, catches in-place edits such as takatime migrations
- */
-const RESYNC_INTERVAL = 15 * 60 * 1000;
-
 const RETRY_INTERVAL = 10_000;
+
+/**
+ * how often to retry a server without change streams, in case it became a replica set
+ */
+const UNSUPPORTED_RETRY = 60_000;
 
 /**
  * how long to keep watching after the last subscriber leaves
@@ -79,7 +74,6 @@ type State = {
   idleTimer: ReturnType<typeof setTimeout> | null;
   notifyTimer: ReturnType<typeof setTimeout> | null;
   reloadTimer: ReturnType<typeof setTimeout> | null;
-  resyncAt: number;
   queue: Promise<void>;
   listeners: Set<Listener>;
   dispose?: () => void;
@@ -113,7 +107,6 @@ const state: State = (globals.__takawebStore = {
   idleTimer: null,
   notifyTimer: null,
   reloadTimer: null,
-  resyncAt: 0,
   queue: Promise.resolve(),
   listeners: new Set(),
 });
@@ -241,7 +234,6 @@ async function reload() {
 
   state.data = data;
   state.loaded = true;
-  state.resyncAt = Date.now() + RESYNC_INTERVAL;
 }
 
 /**
@@ -339,39 +331,7 @@ function fail(epoch: number, error: unknown) {
 }
 
 /**
- * check for changes on an interval, for standalone servers without change streams
- *
- * @param epoch watcher epoch
- */
-async function poll(epoch: number) {
-  if (epoch !== state.epoch) return;
-
-  try {
-    if (Date.now() >= state.resyncAt) {
-      await sync(true);
-    } else {
-      const [count, last] = await Promise.all([
-        logs().estimatedDocumentCount(),
-        logs().findOne({}, { sort: { _id: -1 }, projection: { _id: 1 } }),
-      ]);
-      const { ids } = state.data;
-
-      if (count !== ids.size || (last && !ids.has(String(last._id)))) {
-        await sync(false);
-      }
-    }
-
-    if (epoch !== state.epoch) return;
-
-    setStatus({ state: "ready", mode: "poll" });
-    schedule(() => poll(epoch), POLL_INTERVAL);
-  } catch (error) {
-    fail(epoch, error);
-  }
-}
-
-/**
- * follow a change stream, falling back to polling where unsupported
+ * follow the change stream, the only way mongo pushes changes
  *
  * @param epoch watcher epoch
  */
@@ -384,7 +344,7 @@ async function stream(epoch: number) {
     let change = await changes.tryNext();
 
     await sync(false);
-    if (epoch === state.epoch) setStatus({ state: "ready", mode: "stream" });
+    if (epoch === state.epoch) setStatus({ state: "ready" });
 
     while (epoch === state.epoch) {
       if (change?.operationType === "insert") {
@@ -398,8 +358,14 @@ async function stream(epoch: number) {
   } catch (error) {
     if (epoch !== state.epoch) return;
 
+    // standalone servers keep the data loaded once, but cannot go live
     if ((error as { code?: number }).code === CHANGE_STREAM_UNSUPPORTED) {
-      void poll(epoch);
+      console.error(
+        "[takaweb] live updates need mongo to run as a replica set, see compose.yml",
+      );
+
+      setStatus({ state: "unsupported" });
+      schedule(() => void stream(epoch), UNSUPPORTED_RETRY);
       return;
     }
 
