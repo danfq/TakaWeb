@@ -197,15 +197,6 @@ function SheetContent({
         )}
         {...props}
       >
-        {canResize && (
-          <SheetResizeHandle
-            side={side as "left" | "right"}
-            width={width}
-            defaultWidth={defaultWidth}
-            onResize={setWidth}
-            onCommit={store}
-          />
-        )}
         {children}
         {showCloseButton && (
           <SheetPrimitive.Close
@@ -222,6 +213,16 @@ function SheetContent({
             />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>
+        )}
+        {/* last in tab order, so opening by keyboard lands on the content */}
+        {canResize && (
+          <SheetResizeHandle
+            side={side as "left" | "right"}
+            width={width}
+            defaultWidth={defaultWidth}
+            onResize={setWidth}
+            onCommit={store}
+          />
         )}
       </SheetPrimitive.Popup>
     </SheetPortal>

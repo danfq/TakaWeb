@@ -2,6 +2,7 @@
 import "@/styles/global.css";
 import { cn } from "cn";
 import Header from "@/components/layout/header.astro";
+import { FOCUS_SCRIPT } from "@/lib/focus";
 import { TZ_SCRIPT } from "@/lib/stats/view";
 import { THEME_SCRIPT, themeCss } from "@/lib/themes";
 
@@ -27,6 +28,9 @@ const { title, app = false } = Astro.props;
 
     {/* lets the server render dates in the browser's timezone */}
     <script is:inline set:html={TZ_SCRIPT} />
+
+    {/* focus outlines for keyboard navigation only */}
+    <script is:inline set:html={FOCUS_SCRIPT} />
 
     {/* icons & fonts */}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
