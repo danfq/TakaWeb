@@ -1,5 +1,11 @@
-import type { Snapshot, Status, View } from "@/lib/stats/types";
-import { snapshot } from "./snapshot";
+import type {
+  Detail,
+  PeriodRange,
+  Snapshot,
+  Status,
+  View,
+} from "@/lib/stats/types";
+import { detail, snapshot } from "./snapshot";
 import {
   entries,
   isLoaded,
@@ -151,6 +157,29 @@ export async function initial(
         : snapshot(view, entries(), Date.now()),
       status: status(),
     };
+  } finally {
+    release();
+  }
+}
+
+/**
+ * detailed insights for a period, computed on request
+ *
+ * @param view view
+ * @param period first and last day, inclusive
+ *
+ * @returns {Promise<Detail | null>} detail, null while the logs are unavailable
+ */
+export async function periodDetail(
+  view: View,
+  period: PeriodRange,
+): Promise<Detail | null> {
+  const release = retain();
+
+  try {
+    await whenReady(RENDER_WAIT);
+
+    return isLoaded() ? detail(view, entries(), Date.now(), period) : null;
   } finally {
     release();
   }

@@ -1,10 +1,12 @@
 import {
   RANGES,
   type Bucket,
+  type Detail,
   type Dimension,
   type Item,
   type Latest,
   type Period,
+  type PeriodRange,
   type Range,
   type Session,
   type Snapshot,
@@ -163,14 +165,20 @@ function hourOf(table: Days, ms: number): number {
  *
  * @param list entries ordered by start
  * @param table day table
- * @param froms first day index of each range
+ * @param bounds first and last day index of each range
+ * @param focus day index to split by hour
  *
- * @returns daily seconds, hour of day seconds per range, hourly seconds today
+ * @returns daily seconds, hour of day seconds per range, hourly seconds of the focus day
  */
-function distribute(list: readonly Entry[], table: Days, froms: number[]) {
+function distribute(
+  list: readonly Entry[],
+  table: Days,
+  bounds: [number, number][],
+  focus: number,
+) {
   const daily = new Float64Array(table.keys.length);
-  const hours = froms.map(() => new Array<number>(24).fill(0));
-  const today = new Array<number>(24).fill(0);
+  const hours = bounds.map(() => new Array<number>(24).fill(0));
+  const focused = new Array<number>(24).fill(0);
   const { starts, offsets } = table;
 
   /**
@@ -191,10 +199,11 @@ function distribute(list: readonly Entry[], table: Days, froms: number[]) {
       const hour = ((local % 24) + 24) % 24;
 
       daily[index] += seconds;
-      if (index === table.today) today[hour] += seconds;
+      if (index === focus) focused[hour] += seconds;
 
-      for (let range = 0; range < froms.length; range++) {
-        if (index >= froms[range]) hours[range][hour] += seconds;
+      for (let range = 0; range < bounds.length; range++) {
+        const [from, to] = bounds[range];
+        if (index >= from && index <= to) hours[range][hour] += seconds;
       }
 
       time = end;
@@ -217,7 +226,7 @@ function distribute(list: readonly Entry[], table: Days, froms: number[]) {
 
   if (end > start) spread(start, end);
 
-  return { daily, hours, today };
+  return { daily, hours, focused };
 }
 
 /**
@@ -493,6 +502,28 @@ function groups(list: readonly Entry[], froms: number[], to: number) {
     count(current.branchTally, entry.branch, seconds);
   }
 
+  /**
+   * close an open session for output
+   *
+   * @param session open session
+   *
+   * @returns {Session} session
+   */
+  const finish = ({
+    languageTally,
+    editorTally,
+    branchTally,
+    ...session
+  }: Open): Session => ({
+    ...session,
+    start: Math.round(session.start),
+    end: Math.round(session.end),
+    seconds: Math.round(session.seconds),
+    languages: top(languageTally, 3),
+    editor: top(editorTally, 1)[0] ?? "",
+    branch: top(branchTally, 1)[0] ?? "",
+  });
+
   return {
     rankings: spans.map((ranges, index) => ({
       breakdown: {
@@ -506,18 +537,22 @@ function groups(list: readonly Entry[], froms: number[], to: number) {
       sessionCount: sessions.filter((session) => session.end > froms[index])
         .length,
     })),
-    sessions: sessions
-      .slice(-SESSION_LIMIT)
-      .reverse()
-      .map(({ languageTally, editorTally, branchTally, ...session }) => ({
-        ...session,
-        start: Math.round(session.start),
-        end: Math.round(session.end),
-        seconds: Math.round(session.seconds),
-        languages: top(languageTally, 3),
-        editor: top(editorTally, 1)[0] ?? "",
-        branch: top(branchTally, 1)[0] ?? "",
-      })),
+    sessions: sessions.slice(-SESSION_LIMIT).reverse().map(finish),
+    // only sessions starting in the range, one carried over from before could outgrow it
+    longest: froms.map((from) => {
+      let found: Open | null = null;
+
+      for (const session of sessions) {
+        if (
+          session.start >= from &&
+          (!found || session.seconds > found.seconds)
+        ) {
+          found = session;
+        }
+      }
+
+      return found && finish(found);
+    }),
   };
 }
 
@@ -565,10 +600,11 @@ export function snapshot(
 
   // "all" covers the whole table for the hour of day split, its real start needs the totals
   const drafts = RANGES.map((range) => window(table, range, 0));
-  const { daily, hours, today } = distribute(
+  const { daily, hours, focused } = distribute(
     list,
     table,
-    drafts.map((draft) => draft.from),
+    drafts.map((draft) => [draft.from, table.today]),
+    table.today,
   );
 
   const firstActive = daily.findIndex((seconds) => seconds > 0);
@@ -589,7 +625,7 @@ export function snapshot(
       window.range,
       {
         start: froms[index],
-        activity: activity(window, daily, today, table, now),
+        activity: activity(window, daily, focused, table, now),
         hours: hours[index].map(Math.round),
         ...rankings[index],
       },
@@ -610,5 +646,101 @@ export function snapshot(
     },
     sessions,
     ranges,
+  };
+}
+
+/**
+ * detailed insights for a span of days, opened from the charts
+ *
+ * @param view view
+ * @param all every entry, ordered by start
+ * @param now current instant
+ * @param period first and last day, inclusive
+ *
+ * @returns {Detail} detail
+ */
+export function detail(
+  view: View,
+  all: readonly Entry[],
+  now: number,
+  period: PeriodRange,
+): Detail {
+  const { filter } = view;
+  const list = filter
+    ? all.filter((entry) => entry[filter.dimension] === filter.value)
+    : all;
+
+  const table = days(view.tz, all[0]?.start ?? now, now);
+  // a period in the future comes back empty
+  const from = Math.min(
+    Math.max(keyIndex(table, period.from), 0),
+    table.today + 1,
+  );
+  const to = Math.min(keyIndex(table, period.to), table.today);
+  const span = Math.max(to - from + 1, 0);
+
+  // whole months compare against the month before, anything else against the same span
+  const month =
+    period.from.endsWith("-01") &&
+    keyIndex(table, monthStart(period.from, -1)) - 1 ===
+      keyIndex(table, period.to);
+  const previous: [number, number] = month
+    ? [keyIndex(table, monthStart(period.from, 1)), from - 1]
+    : [from - span, from - 1];
+
+  const { daily, hours, focused } = distribute(list, table, [[from, to]], from);
+
+  const fromMs = table.starts[from];
+  const toMs = table.starts[Math.max(to, from - 1) + 1];
+  const { rankings, sessions, longest } = groups(list, [fromMs], toMs);
+
+  let first: number | null = null;
+  let last: number | null = null;
+
+  for (const entry of list) {
+    if (entry.end <= fromMs || entry.start >= toMs) continue;
+
+    first = Math.min(first ?? Infinity, Math.max(entry.start, fromMs));
+    last = Math.max(last ?? -Infinity, Math.min(entry.end, toMs));
+  }
+
+  const single = period.from === period.to;
+  const buckets: Bucket[] = [];
+
+  if (single) {
+    focused.forEach((seconds, hour) =>
+      buckets.push({
+        key: String(hour).padStart(2, "0"),
+        seconds: Math.round(seconds),
+      }),
+    );
+  } else {
+    for (let index = from; index <= to; index++) {
+      buckets.push({
+        key: table.keys[index],
+        seconds: Math.round(daily[index]),
+      });
+    }
+  }
+
+  let activeDays = 0;
+  for (let index = from; index <= to; index++)
+    if (daily[index] > 0) activeDays++;
+
+  return {
+    view,
+    ...period,
+    unit: single ? "hour" : "day",
+    total: Math.round(sum(daily, from, to)),
+    previous: Math.round(sum(daily, previous[0], previous[1])),
+    activeDays,
+    days: span,
+    buckets,
+    hours: hours[0].map(Math.round),
+    ...rankings[0],
+    sessions: sessions.filter((session) => session.end > fromMs),
+    longest: longest[0],
+    first: first === null ? null : Math.round(first),
+    last: last === null ? null : Math.round(last),
   };
 }
