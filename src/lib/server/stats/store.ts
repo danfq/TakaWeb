@@ -399,9 +399,15 @@ async function start(epoch: number) {
 
   try {
     await sync(!state.loaded);
+
+    // a newer restart owns the catch up, let it settle once it is in sync
+    if (epoch !== state.epoch) return;
+
     settle();
     void stream(epoch);
   } catch (error) {
+    if (epoch !== state.epoch) return;
+
     // the last known logs beat nothing while the database is unreachable
     settle();
     fail(epoch, error);
