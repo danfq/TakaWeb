@@ -1,3 +1,5 @@
+import type { JsonKind, JsonPath, Visit } from "@/lib/json-stream"
+
 /**
  * a wakatime heartbeat as the import sends it, time in epoch ms
  * the server joins every heartbeat it holds into logs, so exports overlapping in any order add up the same
@@ -160,25 +162,17 @@ function parseAgent(value: string): Agent {
 }
 
 /**
- * resolve user agents by id, from the api lookup and from the export when it lists them
+ * read user agents keyed by id, from an export's list or an api lookup
  *
- * @param raw export
- * @param looked up agents from the api
- *
- * @returns {Map<string, Agent>} agents
+ * @param list user agents, an array or an object keyed by id
+ * @param agents where to put them
  */
-function readAgents(raw: Record<string, unknown>, looked: Agents): Map<string, Agent> {
-  const agents = new Map<string, Agent>()
-  const list = raw.user_agents
-
-  const entries = [
-    ...(Array.isArray(list)
-      ? list
-      : list && typeof list === "object"
-        ? Object.entries(list).map(([id, entry]) => ({ id, ...(entry as object) }))
-        : []),
-    ...Object.entries(looked).map(([id, entry]) => ({ id, ...entry })),
-  ]
+function readAgents(list: unknown, agents: Map<string, Agent>) {
+  const entries = Array.isArray(list)
+    ? list
+    : list && typeof list === "object"
+      ? Object.entries(list).map(([id, entry]) => ({ id, ...(entry as object) }))
+      : []
 
   for (const entry of entries as Record<string, unknown>[]) {
     const id = text(entry?.id)
@@ -190,33 +184,96 @@ function readAgents(raw: Record<string, unknown>, looked: Agents): Map<string, A
       os: text(entry.os) ? system(text(entry.os)) : parsed.os,
     })
   }
-
-  return agents
 }
 
 /**
- * read the editor heartbeats out of a wakatime heartbeats export
- * the server joins them into logs, so isolated heartbeats are kept too: another export can fill the gap around them
- *
- * @param raw parsed export json
- * @param looked user agents looked up through the api, names editors and systems
- *
- * @returns {ImportHeartbeat[]} heartbeats, oldest first, one per file and millisecond
+ * a heartbeat read from the export, its editor and os resolved once every user agent is known
  */
-export function parseExport(raw: unknown, looked: Agents = {}): ImportHeartbeat[] {
-  const data = raw as Record<string, unknown>
+type Pending = Omit<ImportHeartbeat, "editor" | "os"> & { agent: Agent | string }
 
-  if (!data || !Array.isArray(data.days)) {
-    throw new Error("This is not a WakaTime heartbeats export, it has no days")
+/**
+ * reads a wakatime heartbeats export one day at a time, so huge exports never sit in memory whole
+ * the server joins heartbeats into logs, so isolated ones are kept too: another export can fill the gap around them
+ */
+export class ExportReader {
+  // user agents listed by the export, it may list them after the days
+  private readonly listed = new Map<string, Agent>()
+  private readonly looked = new Map<string, Agent>()
+  // keyed like the server stores them, a repeated heartbeat is sent once
+  private readonly heartbeats = new Map<string, Pending>()
+  private sawDays = false
+  private days = 0
+
+  /**
+   * @param looked user agents looked up through the api, names editors and systems
+   */
+  constructor(looked: Agents = {}) {
+    readAgents(
+      Object.entries(looked).map(([id, entry]) => ({ id, ...entry })),
+      this.looked
+    )
   }
 
-  const agents = readAgents(data, looked)
-  const unknown: Agent = { editor: UNKNOWN, os: UNKNOWN }
-  // keyed like the server stores them, a repeated heartbeat is sent once
-  const heartbeats = new Map<string, ImportHeartbeat>()
+  /**
+   * what to do with each part of the export, for a streaming parser
+   *
+   * @param path where the value sits
+   * @param kind what the value is
+   *
+   * @returns {Visit} capture days and user agents, skip everything else
+   */
+  visit = (path: JsonPath, kind: JsonKind): Visit => {
+    if (path.length === 0) return kind === "object" ? "descend" : "skip"
 
-  for (const day of data.days as Record<string, unknown>[]) {
-    if (!Array.isArray(day?.heartbeats)) continue
+    if (path.length === 1 && path[0] === "days") {
+      this.sawDays = kind === "array"
+      return this.sawDays ? "descend" : "skip"
+    }
+
+    if (path.length === 2 && path[0] === "days") return "capture"
+    if (path.length === 1 && path[0] === "user_agents") return "capture"
+
+    return "skip"
+  }
+
+  /**
+   * take a value a streaming parser captured
+   *
+   * @param path where it sat
+   * @param value parsed value
+   */
+  value = (path: JsonPath, value: unknown) => {
+    if (path[0] === "days") this.day(value)
+    else if (path[0] === "user_agents") readAgents(value, this.listed)
+  }
+
+  /**
+   * take a whole parsed export
+   *
+   * @param raw parsed export json
+   */
+  document(raw: unknown) {
+    const data = raw as Record<string, unknown>
+    if (!data || typeof data !== "object") return
+
+    if (Array.isArray(data.days)) {
+      this.sawDays = true
+      for (const day of data.days) this.day(day)
+    }
+
+    readAgents(data.user_agents, this.listed)
+  }
+
+  /**
+   * take one day of the export
+   *
+   * @param raw day
+   */
+  private day(raw: unknown) {
+    this.days++
+
+    const day = raw as Record<string, unknown>
+    if (!Array.isArray(day?.heartbeats)) return
 
     for (const beat of day.heartbeats as Record<string, unknown>[]) {
       const time = Number(beat?.time)
@@ -225,30 +282,67 @@ export function parseExport(raw: unknown, looked: Agents = {}): ImportHeartbeat[
       // only editor activity, the browser extension and desktop app log domains and apps
       if (!Number.isFinite(time) || !file || (beat.type && beat.type !== "file")) continue
 
-      const agent = text(beat.user_agent)
-        ? parseAgent(text(beat.user_agent))
-        : (agents.get(text(beat.user_agent_id)) ?? unknown)
-
-      const heartbeat: ImportHeartbeat = {
+      const heartbeat: Pending = {
         time: Math.round(time * 1000),
         file: clip(file, IMPORT_LIMITS.file),
         project: clip(text(beat.project) || UNKNOWN, IMPORT_LIMITS.project),
         language: clip(text(beat.language) || UNKNOWN, IMPORT_LIMITS.language),
         branch: clip(text(beat.branch), IMPORT_LIMITS.branch),
-        editor: clip(agent.editor, IMPORT_LIMITS.editor),
-        os: clip(agent.os, IMPORT_LIMITS.os),
+        // a user agent string names it right away, an id waits for the list
+        agent: text(beat.user_agent) ? parseAgent(text(beat.user_agent)) : text(beat.user_agent_id),
       }
 
       // the server rejects a whole batch over one bad date, so they never leave the browser
       if (!inRange(heartbeat.time)) continue
 
-      heartbeats.set(`${heartbeat.time}:${heartbeat.file}`, heartbeat)
+      this.heartbeats.set(`${heartbeat.time}:${heartbeat.file}`, heartbeat)
     }
   }
 
-  if (!heartbeats.size && (data.days as unknown[]).length) {
-    throw new Error("No editor heartbeats found, export heartbeats rather than daily totals")
-  }
+  /**
+   * every heartbeat read, with editors and systems named
+   *
+   * @returns {ImportHeartbeat[]} heartbeats, oldest first, one per file and millisecond
+   */
+  finish(): ImportHeartbeat[] {
+    if (!this.sawDays) throw new Error("This is not a WakaTime heartbeats export, it has no days")
 
-  return [...heartbeats.values()].sort((a, b) => a.time - b.time || (a.file < b.file ? -1 : 1))
+    if (!this.heartbeats.size && this.days) {
+      throw new Error("No editor heartbeats found, export heartbeats rather than daily totals")
+    }
+
+    const unknown: Agent = { editor: UNKNOWN, os: UNKNOWN }
+    const out: ImportHeartbeat[] = []
+
+    for (const { agent, ...beat } of this.heartbeats.values()) {
+      // looked up agents win, the export's own list may be stale
+      const resolved =
+        typeof agent === "string" ? (this.looked.get(agent) ?? this.listed.get(agent) ?? unknown) : agent
+
+      out.push({
+        ...beat,
+        editor: clip(resolved.editor, IMPORT_LIMITS.editor),
+        os: clip(resolved.os, IMPORT_LIMITS.os),
+      })
+    }
+
+    this.heartbeats.clear()
+
+    return out.sort((a, b) => a.time - b.time || (a.file < b.file ? -1 : 1))
+  }
+}
+
+/**
+ * read the editor heartbeats out of a parsed wakatime heartbeats export
+ *
+ * @param raw parsed export json
+ * @param looked user agents looked up through the api, names editors and systems
+ *
+ * @returns {ImportHeartbeat[]} heartbeats, oldest first, one per file and millisecond
+ */
+export function parseExport(raw: unknown, looked: Agents = {}): ImportHeartbeat[] {
+  const reader = new ExportReader(looked)
+  reader.document(raw)
+
+  return reader.finish()
 }

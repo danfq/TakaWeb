@@ -15,7 +15,8 @@ import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "@
 import { Input } from "@/components/ui/input"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Spinner } from "@/components/ui/spinner"
-import { UNKNOWN, importBatches, parseExport, type Agents } from "@/lib/wakatime"
+import type { ImportMessage, ImportRequest } from "@/components/settings/import.worker"
+import type { Agents } from "@/lib/wakatime"
 
 /**
  * how long the remove button waits for its confirming click
@@ -66,6 +67,7 @@ function ImportDialog({
   onImported: () => void
 }) {
   const input = useRef<HTMLInputElement>(null)
+  const worker = useRef<Worker | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [names, setNames] = useState<Names>("skip")
   const [token, setToken] = useState("")
@@ -83,6 +85,9 @@ function ImportDialog({
     setToken("")
     setPhase({ state: "form" })
   }, [open])
+
+  // an import never outlives the page
+  useEffect(() => () => worker.current?.terminate(), [])
 
   /**
    * look up names if asked, convert the export and send it over in batches
@@ -110,68 +115,71 @@ function ImportDialog({
 
     setPhase({ state: "working", message: "Reading export" })
 
-    let heartbeats
-    try {
-      heartbeats = parseExport(JSON.parse(await file.text()), agents)
-    } catch (error) {
-      return setPhase({
-        state: "form",
-        error: error instanceof SyntaxError ? "This file is not valid JSON" : (error as Error).message,
-      })
-    }
-
-    if (!heartbeats.length) {
-      return setPhase({ state: "done", message: "Nothing to import, the export has no heartbeats." })
-    }
-
-    let added = 0
-    let skipped = 0
-    let sent = 0
+    // reading and sending happen in a worker, so the tab stays responsive for any export size
+    const job = new Worker(new URL("./import.worker.ts", import.meta.url), { type: "module" })
+    worker.current = job
 
     /**
-     * back to the form after a failed batch, earlier batches stay saved
-     *
-     * @param reason what went wrong
+     * stop the worker once it is finished
      */
-    const stopped = (reason: string) => {
-      onImported()
-      setPhase({
-        state: "form",
-        error: `${reason}. ${count(added)} heartbeats were saved before it stopped, importing again picks up the rest.`,
-      })
+    const finish = () => {
+      job.terminate()
+      if (worker.current === job) worker.current = null
     }
 
-    for (const batch of importBatches(heartbeats)) {
-      setPhase({
-        state: "working",
-        message: `Importing ${count(sent)} of ${count(heartbeats.length)} heartbeats`,
-      })
+    job.onmessage = ({ data }: MessageEvent<ImportMessage>) => {
+      switch (data.type) {
+        case "reading":
+          return setPhase({
+            state: "working",
+            message: data.size
+              ? `Reading export, ${Math.floor((data.read / data.size) * 100)}%`
+              : "Reading export",
+          })
 
-      try {
-        const { data, error } = await actions.wakatime.import({ heartbeats: batch })
-        if (error) return stopped(error.message)
+        case "sending":
+          return setPhase({
+            state: "working",
+            message: `Importing ${count(data.sent)} of ${count(data.total)} heartbeats`,
+          })
 
-        added += data.added
-        skipped += data.skipped
-        sent += batch.length
-      } catch {
-        return stopped("Could not reach TakaWeb")
+        case "done":
+          finish()
+          onImported()
+
+          return setPhase({
+            state: "done",
+            message: !data.total
+              ? "Nothing to import, the export has no heartbeats."
+              : [
+                  `Added ${count(data.added)} heartbeats to your dashboard.`,
+                  data.skipped && `${count(data.skipped)} were already imported.`,
+                  data.unnamed && `${count(data.unnamed)} have no editor name.`,
+                ]
+                  .filter(Boolean)
+                  .join(" "),
+          })
+
+        case "failed":
+          finish()
+          if (data.added) onImported()
+
+          // earlier batches stay saved
+          return setPhase({
+            state: "form",
+            error: data.added
+              ? `${data.message}. ${count(data.added)} heartbeats were saved before it stopped, importing again picks up the rest.`
+              : data.message,
+          })
       }
     }
 
-    const unnamed = heartbeats.filter((beat) => beat.editor === UNKNOWN).length
+    job.onerror = () => {
+      finish()
+      setPhase({ state: "form", error: "The import stopped unexpectedly, try again" })
+    }
 
-    onImported()
-    setPhase({
-      state: "done",
-      message: [
-        `Added ${count(added)} heartbeats to your dashboard.`,
-        skipped && `${count(skipped)} were already imported.`,
-        unnamed && `${count(unnamed)} have no editor name.`,
-      ]
-        .filter(Boolean)
-        .join(" "),
-    })
+    job.postMessage({ file, agents } satisfies ImportRequest)
   }
 
   return (
@@ -192,7 +200,8 @@ function ImportDialog({
                 your <strong className="font-medium">Heartbeats</strong>.
               </li>
               <li>
-                Choose that file below. It is read in your browser and saved to TakaWeb&apos;s own database.
+                Choose that file below. It is read in your browser, in the background, and saved to
+                TakaWeb&apos;s own database.
               </li>
             </ol>
 
@@ -319,9 +328,9 @@ function ImportDialog({
 /**
  * wakatime import entry in settings, with a way to remove what was imported
  */
-export default function WakatimeImport() {
+export default function WakatimeImport({ imported: initial }: { imported: number }) {
   const [open, setOpen] = useState(false)
-  const [imported, setImported] = useState<number | null>(null)
+  const [imported, setImported] = useState(initial)
   const [notice, setNotice] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [removing, setRemoving] = useState(false)
@@ -337,10 +346,6 @@ export default function WakatimeImport() {
       // keeps the last known count, the next refresh tries again
     }
   }
-
-  useEffect(() => {
-    refresh()
-  }, [])
 
   // the confirming click has to come soon after the first
   useEffect(() => {

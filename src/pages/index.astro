@@ -2,6 +2,7 @@
 import MainLayout from "@/layouts/main.astro"
 import Dashboard from "@/components/dashboard/dashboard"
 import { listSessions } from "@/lib/server/auth/session"
+import { importedCount } from "@/lib/server/imports"
 import { preferredLocale } from "@/lib/server/locale"
 import { getSettings } from "@/lib/server/settings"
 import { fixedRange } from "@/lib/settings"
@@ -29,6 +30,7 @@ const settings = getSettings(user.id)
 // everything the settings sheet shows, so it opens without loading
 const account = {
   sessions: listSessions(user.id, session.id),
+  imported: importedCount(),
 }
 ---
 

@@ -308,7 +308,7 @@ export default function SettingsSheet({ account }: { account: Account }) {
           <AccountSection sessions={sessions} onSessions={setSessions} />
 
           <Section title="Data">
-            <WakatimeImport />
+            <WakatimeImport imported={account.imported} />
           </Section>
         </div>
       </SheetContent>

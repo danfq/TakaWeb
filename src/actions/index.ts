@@ -15,13 +15,12 @@ import {
   type User,
 } from "@/lib/server/auth/session"
 import { clientIp, userAgent } from "@/lib/server/client"
-import { importHeartbeats, importedCount, removeImported } from "@/lib/server/imports"
+import { importedCount, removeImported } from "@/lib/server/imports"
 import { limits, type Limiter } from "@/lib/server/limiter"
 import { resetSettings, updateSettings } from "@/lib/server/settings"
 import { importsChanged } from "@/lib/server/stats/store"
 import { LookupError, lookupAgents } from "@/lib/server/wakatime"
 import { CHOICES } from "@/lib/settings"
-import { IMPORT_BATCH, IMPORT_LIMITS } from "@/lib/wakatime"
 
 /**
  * password policy, capped to keep hashing cheap
@@ -30,20 +29,6 @@ const password = z
   .string()
   .min(PASSWORD_MIN, `Use at least ${PASSWORD_MIN} characters`)
   .max(PASSWORD_MAX, `Use at most ${PASSWORD_MAX} characters`)
-
-/**
- * a wakatime heartbeat as sent by the import, see ImportHeartbeat
- * times outside the range are skipped rather than rejected, so clock skew never stalls a whole batch
- */
-const importHeartbeat = z.object({
-  time: z.number().int(),
-  file: z.string().min(1).max(IMPORT_LIMITS.file),
-  project: z.string().max(IMPORT_LIMITS.project),
-  language: z.string().max(IMPORT_LIMITS.language),
-  branch: z.string().max(IMPORT_LIMITS.branch),
-  editor: z.string().max(IMPORT_LIMITS.editor),
-  os: z.string().max(IMPORT_LIMITS.os),
-})
 
 /**
  * settings a change may carry, any subset of them
@@ -383,22 +368,6 @@ export const server = {
             message: error.message,
           })
         }
-      },
-    }),
-
-    /**
-     * store a batch of heartbeats read from a wakatime export
-     */
-    import: defineAction({
-      input: z.object({ heartbeats: z.array(importHeartbeat).max(IMPORT_BATCH) }),
-      handler: (input, context) => {
-        const { session } = assertUser(context)
-        assertNotLimited(limits.importBatches, session.id, true)
-
-        const result = importHeartbeats(input.heartbeats)
-        if (result.added) importsChanged()
-
-        return result
       },
     }),
 

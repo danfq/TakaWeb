@@ -15,6 +15,8 @@ export type SessionInfo = {
  */
 export type Account = {
   sessions: SessionInfo[]
+  // heartbeats imported from wakatime
+  imported: number
 }
 
 /**
