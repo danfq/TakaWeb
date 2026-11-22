@@ -17,10 +17,13 @@ env:
         echo ".env already exists, skipping"
         exit 0
     fi
+    # portless gives the dev server a stable local url, plain localhost otherwise
+    url="http://localhost:4321"
+    if command -v portless >/dev/null; then url="$(portless get takaweb)"; fi
     sed \
         -e "s|^MONGO_PASSWORD=.*|MONGO_PASSWORD=$(openssl rand -hex 24)|" \
         -e "s|^MONGO_READONLY_PASSWORD=.*|MONGO_READONLY_PASSWORD=$(openssl rand -hex 24)|" \
-        -e "s|^TAKAWEB_URL=.*|TAKAWEB_URL=$(portless get takaweb)|" \
+        -e "s|^TAKAWEB_URL=.*|TAKAWEB_URL=${url}|" \
         .env.example > .env
     echo "created .env"
 
@@ -53,6 +56,7 @@ dev: up
     set -a; source .env; set +a
     # point the dev server at the published mongo as the read-only user
     export MONGO_URI="mongodb://${MONGO_READONLY_USERNAME:-takaweb}:${MONGO_READONLY_PASSWORD}@127.0.0.1:${MONGO_PORT:-27017}/takatime?authSource=admin&directConnection=true"
+    if command -v portless >/dev/null; then exec portless takaweb bun run dev; fi
     exec bun run dev
 
 # build for production
@@ -61,4 +65,12 @@ build:
 
 # format with prettier
 fmt:
-    bunx prettier --write .
+    bun run fmt
+
+# typecheck and check formatting
+check:
+    bun check
+
+# run the test suite
+test:
+    bun run test

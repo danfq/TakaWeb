@@ -11,9 +11,14 @@
     "node": ">=22.23.4"
   },
   "scripts": {
-    "dev": "portless takaweb astro dev",
+    "dev": "astro dev",
     "build": "astro build",
-    "preview": "portless takaweb astro preview",
+    "preview": "astro preview",
+    "start": "node dist/server/entry.mjs",
+    "check": "astro check && prettier --check .",
+    "fmt": "prettier --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "astro": "astro"
   },
   "dependencies": {
