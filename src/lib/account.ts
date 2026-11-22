@@ -34,7 +34,7 @@ const BROWSERS: [RegExp, string][] = [
   [/\bVivaldi\//, "Vivaldi"],
   [/\bSamsungBrowser\//, "Samsung Internet"],
   [/\b(?:Firefox|FxiOS)\//, "Firefox"],
-  [/\b(?:Chrome|CriOS|Chromium)\//, "Chrome"],
+  [/(?:\b|Headless)(?:Chrome|Chromium)\/|\bCriOS\//, "Chrome"],
   [/\bVersion\/[\d.]+.*\bSafari\//, "Safari"],
   [/\bcurl\//, "curl"],
 ]
