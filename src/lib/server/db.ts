@@ -40,6 +40,10 @@ const migrations = [
     PRIMARY KEY (source, id)
   ) WITHOUT ROWID;
   `,
+  // finds imported logs a re-import overlaps
+  `
+  CREATE INDEX imported_log_start ON imported_log (source, start);
+  `,
 ];
 
 /**

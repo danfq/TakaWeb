@@ -1,6 +1,6 @@
 import { db, transaction } from "@/lib/server/db"
 import type { Entry } from "@/lib/server/stats/store"
-import type { ImportLog } from "@/lib/wakatime"
+import { IMPORT_TIMEOUT, type ImportLog } from "@/lib/wakatime"
 
 /**
  * where imported logs came from, the only source for now
@@ -54,15 +54,23 @@ export function importedCount(): number {
 }
 
 /**
- * store a batch of imported logs, skipping ones already stored
+ * store a batch of imported logs, skipping ones already stored as they are
+ * a later export can split an interval with heartbeats the earlier one lacked,
+ * so a log whose span changed replaces its old row and any imported rows it overlaps
  *
  * @param logs logs
  *
- * @returns {{ added: number; skipped: number }} counts
+ * @returns {{ added: number; skipped: number }} counts, replaced logs count as added
  */
 export function importLogs(logs: ImportLog[]): { added: number; skipped: number } {
+  const existing = db.prepare("SELECT start, end FROM imported_log WHERE source = ? AND id = ?")
+  // one export's logs never overlap and last at most the timeout, which bounds the scan
+  const clear = db.prepare(
+    `DELETE FROM imported_log
+     WHERE source = ? AND (id = ? OR (start > ? AND start < ? AND end > ?))`
+  )
   const insert = db.prepare(
-    `INSERT OR IGNORE INTO imported_log (source, id, start, end, project, language, editor, os, branch, file)
+    `INSERT INTO imported_log (source, id, start, end, project, language, editor, os, branch, file)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
 
@@ -70,10 +78,16 @@ export function importLogs(logs: ImportLog[]): { added: number; skipped: number 
     let added = 0
 
     for (const log of logs) {
-      const { changes } = insert.run(
+      const start = Math.round(log.end - log.duration * 1000)
+      const stored = existing.get(SOURCE, log.id) as { start: number; end: number } | undefined
+
+      if (stored?.start === start && stored.end === log.end) continue
+
+      clear.run(SOURCE, log.id, start - IMPORT_TIMEOUT * 1000, log.end, start)
+      insert.run(
         SOURCE,
         log.id,
-        Math.round(log.end - log.duration * 1000),
+        start,
         log.end,
         log.project,
         log.language,
@@ -83,7 +97,7 @@ export function importLogs(logs: ImportLog[]): { added: number; skipped: number 
         log.file
       )
 
-      added += Number(changes)
+      added++
     }
 
     return added
