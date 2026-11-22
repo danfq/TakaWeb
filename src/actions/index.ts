@@ -1,4 +1,4 @@
-import { ActionError, defineAction } from "astro:actions";
+import { ActionError, defineAction, type ActionAPIContext } from "astro:actions";
 import { z } from "astro/zod";
 import {
   createAdmin,
@@ -18,6 +18,14 @@ import {
   invalidateSession,
   setSessionCookie,
 } from "@/lib/server/auth/session";
+import {
+  importLogs,
+  importedCount,
+  removeImported,
+} from "@/lib/server/imports";
+import { importsChanged } from "@/lib/server/stats/store";
+import { LookupError, lookupAgents } from "@/lib/server/wakatime";
+import { IMPORT_BATCH, IMPORT_TIMEOUT } from "@/lib/wakatime";
 
 /**
  * password policy, capped to keep hashing cheap
@@ -26,6 +34,32 @@ const password = z
   .string()
   .min(12, "Use at least 12 characters")
   .max(128, "Use at most 128 characters");
+
+/**
+ * a wakatime log as sent by the import, see ImportLog
+ */
+const importLog = z.object({
+  id: z.string().min(1).max(256),
+  file: z.string().min(1).max(4096),
+  project: z.string().max(512),
+  language: z.string().max(256),
+  branch: z.string().max(512),
+  editor: z.string().max(256),
+  os: z.string().max(64),
+  end: z.number().int().positive(),
+  duration: z.number().positive().max(IMPORT_TIMEOUT),
+});
+
+/**
+ * reject a request without a signed in admin
+ *
+ * @param context action context
+ */
+function assertUser(context: ActionAPIContext) {
+  if (!context.locals.user) {
+    throw new ActionError({ code: "UNAUTHORIZED", message: "Sign in first" });
+  }
+}
 
 /**
  * reject a request once its key ran out of attempts
@@ -133,6 +167,69 @@ export const server = {
       handler: (_, context) => {
         if (context.locals.session) invalidateSession(context.locals.session.id);
         deleteSessionCookie(context);
+      },
+    }),
+  },
+
+  wakatime: {
+    /**
+     * how many logs came from wakatime
+     */
+    status: defineAction({
+      handler: (_, context) => {
+        assertUser(context);
+
+        return { imported: importedCount() };
+      },
+    }),
+
+    /**
+     * name the editors and systems behind wakatime user agents, the token is never stored
+     */
+    agents: defineAction({
+      input: z.object({ token: z.string().trim().min(1).max(512) }),
+      handler: async (input, context) => {
+        assertUser(context);
+
+        try {
+          return await lookupAgents(input.token);
+        } catch (error) {
+          if (!(error instanceof LookupError)) throw error;
+
+          throw new ActionError({
+            code: error.rejected ? "BAD_REQUEST" : "BAD_GATEWAY",
+            message: error.message,
+          });
+        }
+      },
+    }),
+
+    /**
+     * store a batch of logs converted from a wakatime export
+     */
+    import: defineAction({
+      input: z.object({ logs: z.array(importLog).max(IMPORT_BATCH) }),
+      handler: (input, context) => {
+        assertUser(context);
+
+        const result = importLogs(input.logs);
+        if (result.added) importsChanged();
+
+        return result;
+      },
+    }),
+
+    /**
+     * delete every log a wakatime import added
+     */
+    remove: defineAction({
+      handler: (_, context) => {
+        assertUser(context);
+
+        const removed = removeImported();
+        if (removed) importsChanged();
+
+        return { removed };
       },
     }),
   },

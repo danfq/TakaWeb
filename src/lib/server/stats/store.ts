@@ -1,4 +1,5 @@
 import { ObjectId, type ChangeStream, type Document } from "mongodb";
+import { importedEntries, importedVersion } from "@/lib/server/imports";
 import { hasMongo, logs } from "@/lib/server/mongo";
 import type { Status } from "@/lib/stats/types";
 
@@ -479,8 +480,39 @@ export function subscribe(listener: Listener): () => void {
   return () => state.listeners.delete(listener);
 }
 
+// mongo and imported logs combined, rebuilt when either changes
+let merged: {
+  data: Data;
+  length: number;
+  version: number;
+  entries: Entry[];
+} | null = null;
+
 /**
- * all logs ordered by start
+ * merge two lists ordered by start
+ *
+ * @param a first list
+ * @param b second list
+ *
+ * @returns {Entry[]} merged list
+ */
+function mergeSorted(a: readonly Entry[], b: readonly Entry[]): Entry[] {
+  const out: Entry[] = new Array(a.length + b.length);
+  let i = 0;
+  let j = 0;
+  let k = 0;
+
+  while (i < a.length && j < b.length) {
+    out[k++] = a[i].start <= b[j].start ? a[i++] : b[j++];
+  }
+  while (i < a.length) out[k++] = a[i++];
+  while (j < b.length) out[k++] = b[j++];
+
+  return out;
+}
+
+/**
+ * all logs ordered by start, takatime's own and imported ones
  *
  * @returns {readonly Entry[]} entries
  */
@@ -492,8 +524,31 @@ export function entries(): readonly Entry[] {
     data.sorted = true;
   }
 
-  return data.entries;
+  const imported = importedEntries();
+  if (!imported.length) return data.entries;
+
+  const version = importedVersion();
+
+  if (
+    merged?.data !== data ||
+    merged.length !== data.entries.length ||
+    merged.version !== version
+  ) {
+    merged = {
+      data,
+      length: data.entries.length,
+      version,
+      entries: mergeSorted(data.entries, imported),
+    };
+  }
+
+  return merged.entries;
 }
+
+/**
+ * tell listeners imported logs changed, so dashboards pick them up
+ */
+export const importsChanged = (): void => notify();
 
 /**
  * wait for the first load, or for it to fail

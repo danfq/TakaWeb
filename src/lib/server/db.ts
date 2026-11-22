@@ -24,6 +24,22 @@ const migrations = [
 
   CREATE INDEX session_user_id ON session (user_id);
   `,
+  // coding time imported from other trackers, kept here so the takatime mongo stays read-only
+  `
+  CREATE TABLE imported_log (
+    source TEXT NOT NULL,
+    id TEXT NOT NULL,
+    start INTEGER NOT NULL,
+    end INTEGER NOT NULL,
+    project TEXT NOT NULL,
+    language TEXT NOT NULL,
+    editor TEXT NOT NULL,
+    os TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    file TEXT NOT NULL,
+    PRIMARY KEY (source, id)
+  ) WITHOUT ROWID;
+  `,
 ];
 
 /**
@@ -91,3 +107,6 @@ function open(): DatabaseSync {
 const globals = globalThis as typeof globalThis & { __takawebDb?: DatabaseSync };
 
 export const db = (globals.__takawebDb ??= open());
+
+// a reused handle still picks up migrations added since it opened
+migrate(db);
