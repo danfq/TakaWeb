@@ -11,6 +11,7 @@ import Sessions from "@/components/dashboard/sessions"
 import Summary from "@/components/dashboard/summary"
 import { useStream } from "@/components/dashboard/use-stream"
 import { SettingsProvider, useSettings, useSettingsStore } from "@/components/settings/settings-store"
+import type { Account } from "@/lib/account"
 import { hour12, type Settings } from "@/lib/settings"
 import { dayKey, duration } from "@/lib/stats/format"
 import type { Filter, PeriodRange, Range, Snapshot, Status } from "@/lib/stats/types"
@@ -42,6 +43,7 @@ export type DashboardProps = {
   locale: string
   now: number
   settings: Settings
+  account: Account
 }
 
 /**
@@ -387,6 +389,7 @@ function DashboardView(initial: DashboardProps) {
           onRange={setRange}
           filter={filter}
           onFilter={changeFilter}
+          account={initial.account}
         />
 
         <main className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4 lg:gap-4 lg:px-6 lg:pb-6">

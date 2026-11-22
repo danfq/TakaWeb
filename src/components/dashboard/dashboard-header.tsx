@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useNamesHidden } from "@/components/settings/settings-store"
+import type { Account } from "@/lib/account"
 import { ago, label, sensitive } from "@/lib/stats/format"
 import type { Filter, Latest, Range, Status } from "@/lib/stats/types"
 import { RANGE_OPTIONS } from "@/lib/stats/view"
@@ -104,6 +105,8 @@ type DashboardHeaderProps = LiveProps & {
   onRange: (range: Range) => void
   filter: Filter | null
   onFilter: (filter: Filter | null) => void
+  // what the settings sheet shows, rendered with the page
+  account: Account
 }
 
 /**
@@ -115,6 +118,7 @@ export default function DashboardHeader({
   filter,
   onFilter,
   pending,
+  account,
   ...live
 }: DashboardHeaderProps) {
   const FilterIcon = filter ? FILTER_ICONS[filter.dimension] : null
@@ -168,7 +172,7 @@ export default function DashboardHeader({
 
       <div className="flex items-center gap-1 justify-self-end max-sm:col-start-2 max-sm:row-start-1">
         <ThemePicker />
-        <SettingsSheet />
+        <SettingsSheet account={account} />
         <LogoutButton />
       </div>
     </header>

@@ -7,12 +7,14 @@ import {
   createSession,
   deleteSessionCookie,
   invalidateSession,
+  listSessions,
   revokeOtherSessions,
+  revokeSession,
   setSessionCookie,
   type Session,
   type User,
 } from "@/lib/server/auth/session"
-import { clientIp } from "@/lib/server/client"
+import { clientIp, userAgent } from "@/lib/server/client"
 import { importHeartbeats, importedCount, removeImported } from "@/lib/server/imports"
 import { limits, type Limiter } from "@/lib/server/limiter"
 import { resetSettings, updateSettings } from "@/lib/server/settings"
@@ -128,9 +130,10 @@ function assertCanAttempt(context: ActionAPIContext): string {
  *
  * @param context action context
  * @param userId user id
+ * @param ip client address
  */
-function signIn(context: ActionAPIContext, userId: number) {
-  const { token, expiresAt } = createSession(userId)
+function signIn(context: ActionAPIContext, userId: number, ip: string) {
+  const { token, expiresAt } = createSession(userId, { ip, userAgent: userAgent(context) })
   setSessionCookie(context, token, expiresAt)
 }
 
@@ -183,7 +186,7 @@ export const server = {
         limits.authFailures.reset(ip)
         console.log("[takaweb] admin account created")
 
-        signIn(context, adminId)
+        signIn(context, adminId, ip)
       },
     }),
 
@@ -209,7 +212,7 @@ export const server = {
         }
 
         limits.authFailures.reset(ip)
-        signIn(context, admin.id)
+        signIn(context, admin.id, ip)
       },
     }),
 
@@ -272,6 +275,51 @@ export const server = {
         console.log("[takaweb] admin password changed")
 
         return { revoked }
+      },
+    }),
+
+    /**
+     * every signed in session
+     */
+    sessions: defineAction({
+      handler: (_, context) => {
+        const { user, session } = assertUser(context)
+        assertNotLimited(limits.requests, session.id, true)
+
+        return listSessions(user.id, session.id)
+      },
+    }),
+
+    /**
+     * sign out another session
+     */
+    revoke: defineAction({
+      input: z.object({ id: z.string().regex(/^[a-f0-9]{64}$/) }),
+      handler: (input, context) => {
+        const { user, session } = assertUser(context)
+        assertNotLimited(limits.requests, session.id, true)
+
+        if (input.id === session.id) {
+          throw new ActionError({ code: "BAD_REQUEST", message: "Sign out of this session instead" })
+        }
+
+        revokeSession(user.id, input.id, session.id)
+
+        return listSessions(user.id, session.id)
+      },
+    }),
+
+    /**
+     * sign out every session but this one
+     */
+    revokeOthers: defineAction({
+      handler: (_, context) => {
+        const { user, session } = assertUser(context)
+        assertNotLimited(limits.requests, session.id, true)
+
+        revokeOtherSessions(user.id, session.id)
+
+        return listSessions(user.id, session.id)
       },
     }),
   },

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
+import { actions } from "astro:actions"
 import { KeyRound, RotateCcw, Settings as SettingsIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,8 +24,10 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import PasswordDialog from "@/components/settings/password-dialog"
+import SessionList from "@/components/settings/session-list"
 import { useSettings, useSettingsError, useSettingsStore } from "@/components/settings/settings-store"
 import WakatimeImport from "@/components/settings/wakatime-import"
+import type { Account, SessionInfo } from "@/lib/account"
 import { keyboardMode } from "@/lib/focus"
 import { DEFAULT_SETTINGS, type Settings } from "@/lib/settings"
 import { RANGE_OPTIONS } from "@/lib/stats/view"
@@ -154,10 +157,26 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /**
- * the account password
+ * the account password and every signed in session
  */
-function AccountSection() {
+function AccountSection({
+  sessions,
+  onSessions,
+}: {
+  sessions: SessionInfo[]
+  onSessions: (sessions: SessionInfo[]) => void
+}) {
   const [changing, setChanging] = useState(false)
+
+  /**
+   * show the sessions left after a password change signed the others out
+   */
+  const refresh = async () => {
+    try {
+      const { data } = await actions.auth.sessions()
+      if (data) onSessions(data)
+    } catch {}
+  }
 
   return (
     <Section title="Account">
@@ -172,7 +191,16 @@ function AccountSection() {
           Change
         </Button>
 
-        <PasswordDialog open={changing} onOpenChange={setChanging} onChanged={() => {}} />
+        <PasswordDialog open={changing} onOpenChange={setChanging} onChanged={refresh} />
+      </Field>
+
+      <Field>
+        <FieldContent>
+          <FieldTitle>Sessions</FieldTitle>
+          <FieldDescription>Browsers signed in to TakaWeb.</FieldDescription>
+        </FieldContent>
+
+        <SessionList sessions={sessions} onSessions={onSessions} />
       </Field>
     </Section>
   )
@@ -181,8 +209,9 @@ function AccountSection() {
 /**
  * settings sidebar, also opens with cmd or ctrl + comma
  */
-export default function SettingsSheet() {
+export default function SettingsSheet({ account }: { account: Account }) {
   const [open, setOpen] = useState(false)
+  const [sessions, setSessions] = useState(account.sessions)
   const settings = useSettings()
   const error = useSettingsError()
   const { reset } = useSettingsStore()
@@ -216,6 +245,16 @@ export default function SettingsSheet() {
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [])
+
+  // the rendered list shows right away, sign ins elsewhere since then fill in quietly
+  useEffect(() => {
+    if (!open) return
+
+    actions.auth
+      .sessions()
+      .then(({ data }) => data && setSessions(data))
+      .catch(() => {})
+  }, [open])
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -266,7 +305,7 @@ export default function SettingsSheet() {
             </Section>
           ))}
 
-          <AccountSection />
+          <AccountSection sessions={sessions} onSessions={setSessions} />
 
           <Section title="Data">
             <WakatimeImport />

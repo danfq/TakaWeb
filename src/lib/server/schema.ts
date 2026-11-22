@@ -81,6 +81,11 @@ const migrations: (string | ((database: DatabaseSync) => void))[] = [
       database.exec("ALTER TABLE imported_heartbeat ADD COLUMN boundary INTEGER NOT NULL DEFAULT 0")
     }
   },
+  // where each session signed in from, shown in the session list
+  `
+  ALTER TABLE session ADD COLUMN ip TEXT NOT NULL DEFAULT '';
+  ALTER TABLE session ADD COLUMN user_agent TEXT NOT NULL DEFAULT '';
+  `,
   // settings follow the account across devices, stored as one json document
   `
   CREATE TABLE setting (

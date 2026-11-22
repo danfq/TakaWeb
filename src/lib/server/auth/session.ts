@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto"
 import type { AstroCookies } from "astro"
 import { TAKAWEB_URL } from "astro:env/server"
 import { db } from "@/lib/server/db"
+import type { SessionInfo } from "@/lib/account"
 
 export const SESSION_COOKIE = "takaweb_session"
 
@@ -15,6 +16,11 @@ const RENEW_THRESHOLD = SESSION_TTL / 2
 
 export type User = { id: number; username: string }
 export type Session = { id: string; userId: number; expiresAt: number }
+
+/**
+ * where a session signed in from
+ */
+export type SessionOrigin = { ip: string; userAgent: string }
 
 type CookieContext = { cookies: AstroCookies; url: URL }
 
@@ -31,10 +37,14 @@ const toSessionId = (token: string): string => createHash("sha256").update(token
  * create a session for a user
  *
  * @param userId user id
+ * @param origin address and user agent it signed in from
  *
  * @returns {{ token: string; expiresAt: number }} raw token and expiry
  */
-export function createSession(userId: number): {
+export function createSession(
+  userId: number,
+  origin: SessionOrigin
+): {
   token: string
   expiresAt: number
 } {
@@ -44,12 +54,9 @@ export function createSession(userId: number): {
 
   // prune expired sessions on the way
   db.prepare("DELETE FROM session WHERE expires_at <= ?").run(now)
-  db.prepare("INSERT INTO session (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)").run(
-    toSessionId(token),
-    userId,
-    expiresAt,
-    now
-  )
+  db.prepare(
+    "INSERT INTO session (id, user_id, expires_at, created_at, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(toSessionId(token), userId, expiresAt, now, origin.ip, origin.userAgent)
 
   return { token, expiresAt }
 }
@@ -103,6 +110,49 @@ export function validateSession(token: string): { session: Session; user: User; 
  */
 export function invalidateSession(id: string) {
   db.prepare("DELETE FROM session WHERE id = ?").run(id)
+}
+
+/**
+ * every live session of a user, newest first
+ *
+ * @param userId user id
+ * @param currentId session making the request
+ *
+ * @returns {SessionInfo[]} sessions
+ */
+export function listSessions(userId: number, currentId: string): SessionInfo[] {
+  const rows = db
+    .prepare(
+      `SELECT id, ip, user_agent, created_at FROM session
+       WHERE user_id = ? AND expires_at > ?
+       ORDER BY created_at DESC, id`
+    )
+    .all(userId, Date.now()) as { id: string; ip: string; user_agent: string; created_at: number }[]
+
+  return rows.map((row) => ({
+    id: row.id,
+    ip: row.ip,
+    userAgent: row.user_agent,
+    createdAt: row.created_at,
+    current: row.id === currentId,
+  }))
+}
+
+/**
+ * sign out another session of a user, never the one asking
+ *
+ * @param userId user id
+ * @param id session to revoke
+ * @param currentId session making the request
+ *
+ * @returns {boolean} whether a session was revoked
+ */
+export function revokeSession(userId: number, id: string, currentId: string): boolean {
+  if (id === currentId) return false
+
+  const { changes } = db.prepare("DELETE FROM session WHERE id = ? AND user_id = ?").run(id, userId)
+
+  return changes > 0
 }
 
 /**

@@ -1,6 +1,7 @@
 ---
 import MainLayout from "@/layouts/main.astro"
 import Dashboard from "@/components/dashboard/dashboard"
+import { listSessions } from "@/lib/server/auth/session"
 import { preferredLocale } from "@/lib/server/locale"
 import { getSettings } from "@/lib/server/settings"
 import { fixedRange } from "@/lib/settings"
@@ -21,8 +22,14 @@ const { snapshot, status } = await initial(view)
 
 // the middleware only lets signed in visitors through
 const user = Astro.locals.user!
+const session = Astro.locals.session!
 
 const settings = getSettings(user.id)
+
+// everything the settings sheet shows, so it opens without loading
+const account = {
+  sessions: listSessions(user.id, session.id),
+}
 ---
 
 <MainLayout app>
@@ -36,5 +43,6 @@ const settings = getSettings(user.id)
     locale={preferredLocale(Astro.request.headers.get("accept-language"))}
     now={Date.now()}
     settings={settings}
+    account={account}
   />
 </MainLayout>
