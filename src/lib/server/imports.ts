@@ -12,6 +12,11 @@ const SOURCE = "wakatime"
  */
 const FIELDS = ["project", "language", "branch", "editor", "os"] as const
 
+/**
+ * longest an imported log can be, heartbeats further apart are a break
+ */
+export const IMPORTED_MAX_DURATION = IMPORT_TIMEOUT * 1000
+
 // loaded lazily and dropped on every change
 let cache: Entry[] | null = null
 // bumped on every change, lets the store know its merged view is stale
@@ -53,7 +58,7 @@ export function importedEntries(): readonly Entry[] {
     if (boundary) continue
 
     // a heartbeat sharing its instant with the next adds nothing, a long gap is a break
-    if (end === time || end - time > IMPORT_TIMEOUT * 1000) continue
+    if (end === time || end - time > IMPORTED_MAX_DURATION) continue
 
     entries.push({ start: time, end, ...beat })
   }

@@ -1,5 +1,5 @@
-import { ObjectId, type ChangeStream, type Document } from "mongodb"
-import { importedEntries, importedVersion } from "@/lib/server/imports"
+import { ObjectId, type ChangeStream, type ChangeStreamDocument, type Document } from "mongodb"
+import { importedEntries, importedVersion, IMPORTED_MAX_DURATION } from "@/lib/server/imports"
 import { hasMongo, logs } from "@/lib/server/mongo"
 import type { Status } from "@/lib/stats/types"
 
@@ -24,10 +24,20 @@ type Listener = () => void
  */
 type Data = {
   entries: Entry[]
-  ids: Set<string>
+  // every seen document by id, null for malformed ones so drift checks still line up
+  byId: Map<string, Entry | null>
   latestId: ObjectId | null
   sorted: boolean
+  // entries deleted or replaced in place, dropped from the list on the next read
+  removed: Set<Entry>
+  // longest entry seen, bounds how far back a log can reach into a day
+  maxDuration: number
 }
+
+/**
+ * most appends kept for caches to catch up on, past this they rebuild instead
+ */
+const MAX_APPENDED = 50_000
 
 const RETRY_INTERVAL = 10_000
 
@@ -64,6 +74,10 @@ const PROJECTION = {
 
 type State = {
   data: Data
+  // bumped whenever logs change other than by being added, caches rebuild then
+  structure: number
+  // logs added since the last structural change, in arrival order, caches catch up on them
+  appended: Entry[]
   loaded: boolean
   // logs kept from before an idle stop, not trusted until caught up
   catchingUp: boolean
@@ -89,9 +103,11 @@ type State = {
  */
 const empty = (): Data => ({
   entries: [],
-  ids: new Set(),
+  byId: new Map(),
   latestId: null,
   sorted: true,
+  removed: new Set(),
+  maxDuration: 0,
 })
 
 // stop the watcher left behind by a previous dev reload
@@ -100,6 +116,8 @@ globals.__takawebStore?.dispose?.()
 
 const state: State = (globals.__takawebStore = {
   data: empty(),
+  structure: 0,
+  appended: [],
   loaded: false,
   catchingUp: false,
   status: hasMongo() ? { state: "connecting" } : { state: "unconfigured" },
@@ -167,6 +185,14 @@ function toEntry(doc: Document): Entry | null {
 }
 
 /**
+ * mark a structural change, caches rebuild from scratch on their next read
+ */
+function restructure() {
+  state.structure++
+  state.appended = []
+}
+
+/**
  * track a document, ignoring ones already seen
  *
  * @param data target data
@@ -177,8 +203,7 @@ function toEntry(doc: Document): Entry | null {
 function add(data: Data, doc: Document): boolean {
   const key = String(doc._id)
 
-  if (data.ids.has(key)) return false
-  data.ids.add(key)
+  if (data.byId.has(key)) return false
 
   if (
     doc._id instanceof ObjectId &&
@@ -189,12 +214,42 @@ function add(data: Data, doc: Document): boolean {
 
   // malformed logs still count towards ids so drift checks line up
   const entry = toEntry(doc)
+  data.byId.set(key, entry)
+
   if (!entry) return true
 
   const last = data.entries.at(-1)
   if (last && entry.start < last.start) data.sorted = false
 
   data.entries.push(entry)
+  data.maxDuration = Math.max(data.maxDuration, entry.end - entry.start)
+
+  // live data only, a reload swaps in a new set and restructures anyway
+  if (data === state.data) {
+    if (state.appended.length >= MAX_APPENDED) restructure()
+    else state.appended.push(entry)
+  }
+
+  return true
+}
+
+/**
+ * forget a document, after it was deleted or before it is replaced
+ *
+ * @param data target data
+ * @param id document id
+ *
+ * @returns {boolean} whether it was known
+ */
+function remove(data: Data, id: unknown): boolean {
+  const key = String(id)
+
+  if (!data.byId.has(key)) return false
+
+  const entry = data.byId.get(key)
+  data.byId.delete(key)
+
+  if (entry) data.removed.add(entry)
 
   return true
 }
@@ -235,6 +290,7 @@ async function reload() {
 
   state.data = data
   state.loaded = true
+  restructure()
 }
 
 /**
@@ -259,7 +315,8 @@ async function catchUp(): Promise<boolean> {
   }
 
   // deletes or inserts we could not see, start over
-  if ((await logs().estimatedDocumentCount()) !== data.ids.size) {
+  // an exact count, collection metadata can be off after an unclean shutdown and cause endless reloads
+  if ((await logs().countDocuments({})) !== data.byId.size) {
     await reload()
     return true
   }
@@ -327,12 +384,54 @@ function fail(epoch: number, error: unknown) {
 }
 
 /**
+ * apply one change stream event in place, only unusual events need a reload
+ *
+ * @param change change event
+ * @param epoch watcher epoch
+ */
+function apply(change: ChangeStreamDocument, epoch: number) {
+  const { data } = state
+
+  switch (change.operationType) {
+    case "insert":
+      if (add(data, change.fullDocument)) notify()
+      return
+
+    case "delete":
+      if (remove(data, change.documentKey._id)) {
+        restructure()
+        notify()
+      }
+      return
+
+    case "update":
+    case "replace": {
+      // the document as it is now, missing when it was deleted again since
+      const doc = change.fullDocument
+      const removed = remove(data, change.documentKey._id)
+      const added = doc ? add(data, doc) : false
+
+      if (removed || added) {
+        restructure()
+        notify()
+      }
+      return
+    }
+
+    default:
+      // drops, renames and invalidations, start over
+      requestReload(epoch)
+  }
+}
+
+/**
  * follow the change stream, the only way mongo pushes changes
  *
  * @param epoch watcher epoch
  */
 async function stream(epoch: number) {
-  const changes = logs().watch([], { fullDocument: "default" })
+  // updates come with the whole document, so they apply in place
+  const changes = logs().watch([], { fullDocument: "updateLookup" })
   state.stream = changes
 
   try {
@@ -343,11 +442,7 @@ async function stream(epoch: number) {
     if (epoch === state.epoch) setStatus({ state: "ready" })
 
     while (epoch === state.epoch) {
-      if (change?.operationType === "insert") {
-        if (add(state.data, change.fullDocument)) notify()
-      } else if (change) {
-        requestReload(epoch)
-      }
+      if (change) apply(change, epoch)
 
       change = await changes.next()
     }
@@ -473,9 +568,10 @@ export function subscribe(listener: Listener): () => void {
 // mongo and imported logs combined, rebuilt when either changes
 let merged: {
   data: Data
+  entries: Entry[]
   length: number
   version: number
-  entries: Entry[]
+  merged: Entry[]
 } | null = null
 
 /**
@@ -509,6 +605,11 @@ function mergeSorted(a: readonly Entry[], b: readonly Entry[]): Entry[] {
 export function entries(): readonly Entry[] {
   const { data } = state
 
+  if (data.removed.size) {
+    data.entries = data.entries.filter((entry) => !data.removed.has(entry))
+    data.removed.clear()
+  }
+
   if (!data.sorted) {
     data.entries.sort((a, b) => a.start - b.start)
     data.sorted = true
@@ -519,17 +620,44 @@ export function entries(): readonly Entry[] {
 
   const version = importedVersion()
 
-  if (merged?.data !== data || merged.length !== data.entries.length || merged.version !== version) {
+  if (
+    merged?.data !== data ||
+    merged.entries !== data.entries ||
+    merged.length !== data.entries.length ||
+    merged.version !== version
+  ) {
     merged = {
       data,
+      entries: data.entries,
       length: data.entries.length,
       version,
-      entries: mergeSorted(data.entries, imported),
+      merged: mergeSorted(data.entries, imported),
     }
   }
 
-  return merged.entries
+  return merged.merged
 }
+
+/**
+ * what changed since a cache last read the logs
+ * a different structure or imports version means rebuilding, otherwise only appended logs are new
+ *
+ * @returns {{ structure: number; imports: number; appended: readonly Entry[] }} changes
+ */
+export const changes = (): { structure: number; imports: number; appended: readonly Entry[] } => ({
+  structure: state.structure,
+  imports: importedVersion(),
+  appended: state.appended,
+})
+
+/**
+ * longest log, takatime's own or imported, in ms
+ * logs reaching into a span start at most this long before it
+ *
+ * @returns {number} ms
+ */
+export const maxDuration = (): number =>
+  Math.max(state.data.maxDuration, importedEntries().length ? IMPORTED_MAX_DURATION : 0)
 
 /**
  * tell listeners imported logs changed, so dashboards pick them up
