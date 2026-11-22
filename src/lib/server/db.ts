@@ -5,8 +5,9 @@ import { TAKAWEB_DATA_DIR } from "astro:env/server"
 
 /**
  * schema migrations, applied in order and tracked via user_version
+ * plain sql, or a function for steps that depend on what the database already has
  */
-const migrations = [
+const migrations: (string | ((database: DatabaseSync) => void))[] = [
   `
   CREATE TABLE user (
     id INTEGER PRIMARY KEY,
@@ -45,7 +46,8 @@ const migrations = [
   CREATE INDEX imported_log_start ON imported_log (source, start);
   `,
   // imports keep heartbeats and join them on read, so overlapping exports add up the same in any order
-  // each stored log becomes the heartbeat it started at, plus one where it ended so its time is kept
+  // each stored log becomes the heartbeat it started at, plus a boundary where it ended so its time is kept
+  // a boundary is no real activity: a heartbeat at the same instant owns what follows instead
   `
   CREATE TABLE imported_heartbeat (
     source TEXT NOT NULL,
@@ -56,20 +58,30 @@ const migrations = [
     branch TEXT NOT NULL,
     editor TEXT NOT NULL,
     os TEXT NOT NULL,
+    boundary INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (source, time, file)
   ) WITHOUT ROWID;
 
   INSERT OR IGNORE INTO imported_heartbeat (source, time, file, project, language, branch, editor, os)
   SELECT source, start, file, project, language, branch, editor, os FROM imported_log;
 
-  INSERT OR IGNORE INTO imported_heartbeat (source, time, file, project, language, branch, editor, os)
-  SELECT source, end, file, project, language, branch, editor, os FROM imported_log AS log
+  INSERT OR IGNORE INTO imported_heartbeat (source, time, file, project, language, branch, editor, os, boundary)
+  SELECT source, end, file, project, language, branch, editor, os, 1 FROM imported_log AS log
   WHERE NOT EXISTS (
     SELECT 1 FROM imported_heartbeat AS beat WHERE beat.source = log.source AND beat.time = log.end
   );
 
   DROP TABLE imported_log;
   `,
+  // databases that ran the step above before it marked boundaries lack the column,
+  // theirs can no longer be told apart, so they stay plain heartbeats
+  (database) => {
+    const columns = database.prepare("SELECT name FROM pragma_table_info('imported_heartbeat')").all()
+
+    if (!columns.some((column) => column.name === "boundary")) {
+      database.exec("ALTER TABLE imported_heartbeat ADD COLUMN boundary INTEGER NOT NULL DEFAULT 0")
+    }
+  },
 ]
 
 /**
@@ -103,8 +115,12 @@ function migrate(database: DatabaseSync) {
   const { user_version: version } = database.prepare("PRAGMA user_version").get() as { user_version: number }
 
   for (let index = version; index < migrations.length; index++) {
+    const migration = migrations[index]
+
     transaction(database, () => {
-      database.exec(migrations[index])
+      if (typeof migration === "string") database.exec(migration)
+      else migration(database)
+
       database.exec(`PRAGMA user_version = ${index + 1}`)
     })
   }

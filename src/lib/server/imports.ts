@@ -35,9 +35,11 @@ function changed() {
 export function importedEntries(): readonly Entry[] {
   if (cache) return cache
 
+  // at a shared instant only the last heartbeat owns what follows, so boundaries go first and real ones win
   const beats = db
     .prepare(
-      `SELECT time, file, ${FIELDS.join(", ")} FROM imported_heartbeat WHERE source = ? ORDER BY time, file`
+      `SELECT time, file, ${FIELDS.join(", ")} FROM imported_heartbeat
+       WHERE source = ? ORDER BY time, boundary DESC, file`
     )
     .all(SOURCE) as (Omit<Entry, "start" | "end"> & { time: number })[]
 
@@ -79,32 +81,35 @@ export function importedCount(): number {
 }
 
 /**
- * sql for whether an incoming field fills in a blank or unknown stored one
+ * sql for whether an incoming field replaces the stored one: it knows something,
+ * and the stored one is blank, unknown or only borrowed by a boundary
  *
  * @param field column
  *
  * @returns {string} condition
  */
-const fills = (field: string): string =>
-  `${field} IN ('', '${UNKNOWN}') AND excluded.${field} NOT IN ('', '${UNKNOWN}')`
+const takes = (field: string): string =>
+  `(boundary = 1 OR ${field} IN ('', '${UNKNOWN}')) AND excluded.${field} NOT IN ('', '${UNKNOWN}')`
 
 /**
  * store a batch of imported heartbeats, a heartbeat is its time and file
  * one already stored only fills in what it lacked, e.g. editors a token looked up, and is never rewritten,
  * so importing any export again changes nothing
+ * a boundary left by the migration becomes the real heartbeat once one arrives at its time and file
  *
  * @param heartbeats heartbeats
  *
  * @returns {{ added: number; skipped: number }} counts, filled in heartbeats count as added
  */
 export function importHeartbeats(heartbeats: ImportHeartbeat[]): { added: number; skipped: number } {
-  // the update only runs, and only counts as a change, when something gets filled in
+  // the update only runs, and only counts as a change, when something gets filled in or a boundary becomes real
   const upsert = db.prepare(
     `INSERT INTO imported_heartbeat (source, time, file, ${FIELDS.join(", ")})
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (source, time, file) DO UPDATE SET
-       ${FIELDS.map((field) => `${field} = IIF(${fills(field)}, excluded.${field}, ${field})`).join(", ")}
-     WHERE ${FIELDS.map((field) => `(${fills(field)})`).join(" OR ")}`
+       ${FIELDS.map((field) => `${field} = IIF(${takes(field)}, excluded.${field}, ${field})`).join(", ")},
+       boundary = 0
+     WHERE boundary = 1 OR ${FIELDS.map((field) => `(${takes(field)})`).join(" OR ")}`
   )
 
   const added = transaction(db, () => {
