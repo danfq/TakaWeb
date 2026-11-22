@@ -1,7 +1,9 @@
 import type { APIRoute } from "astro"
+import { tooManyRequests } from "@/lib/server/limiter"
 import { getSettings, onSettings } from "@/lib/server/settings"
 import { isTimeZone } from "@/lib/server/stats/days"
 import { join } from "@/lib/server/stats/hub"
+import { track } from "@/lib/server/streams"
 import type { View } from "@/lib/stats/types"
 import { readFilter } from "@/lib/stats/view"
 
@@ -32,11 +34,16 @@ function parseView(params: URLSearchParams): View {
 export const GET: APIRoute = ({ url, request, locals }) => {
   // the middleware only lets signed in requests through
   const user = locals.user!
+  const session = locals.session!
 
   const view = parseView(url.searchParams)
   const encoder = new TextEncoder()
 
   let cleanup = () => {}
+
+  // checked before the stream starts, start runs right away
+  const untrack = track(session.id, () => cleanup())
+  if (!untrack) return tooManyRequests(60_000)
 
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -84,6 +91,7 @@ export const GET: APIRoute = ({ url, request, locals }) => {
         clearInterval(heartbeat)
         leave()
         unsubscribe()
+        untrack()
 
         try {
           controller.close()

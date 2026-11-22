@@ -520,6 +520,22 @@ function stop() {
 }
 
 /**
+ * stop watching for good and wait for the change stream to close, for shutdown
+ *
+ * @returns {Promise<void>} resolves once closed
+ */
+export async function shutdownStore(): Promise<void> {
+  const changes = state.stream
+
+  stop()
+  if (state.notifyTimer) clearTimeout(state.notifyTimer)
+  state.notifyTimer = null
+  state.listeners.clear()
+
+  await changes?.close().catch(() => {})
+}
+
+/**
  * keep the store live while held
  *
  * @returns {() => void} release

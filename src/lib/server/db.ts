@@ -22,3 +22,17 @@ export const db = (globals.__takawebDb ??= openDatabase(databasePath()))
 // a reused handle still picks up migrations added since it opened
 migrate(db)
 
+
+/**
+ * flush the write-ahead log and close the database, for shutdown
+ */
+export function closeDatabase() {
+  if (!db.isOpen) return
+
+  try {
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE)")
+  } finally {
+    db.close()
+    delete globals.__takawebDb
+  }
+}

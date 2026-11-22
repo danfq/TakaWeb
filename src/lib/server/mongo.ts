@@ -39,3 +39,16 @@ function client(): MongoClient {
  * @returns {Collection<Document>} logs
  */
 export const logs = (): Collection<Document> => client().db(DATABASE).collection(COLLECTION)
+
+/**
+ * close the client, for shutdown
+ *
+ * @returns {Promise<void>} resolves once closed
+ */
+export async function closeMongo(): Promise<void> {
+  const current = globals.__takawebMongo
+  if (!current) return
+
+  delete globals.__takawebMongo
+  await current.close()
+}
