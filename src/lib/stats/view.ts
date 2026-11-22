@@ -9,9 +9,29 @@ export const RANGE_COOKIE = "takaweb_range";
 export const DEFAULT_RANGE: Range = "week";
 
 /**
+ * range names, short ones for tight spaces
+ */
+export const RANGE_OPTIONS: { value: Range; label: string; short: string }[] = [
+  { value: "today", label: "Today", short: "1D" },
+  { value: "week", label: "7 days", short: "7D" },
+  { value: "month", label: "30 days", short: "30D" },
+  { value: "year", label: "Year", short: "1Y" },
+  { value: "all", label: "All time", short: "All" },
+];
+
+/**
  * keeps the timezone cookie current, inlined into every page head
  */
 export const TZ_SCRIPT = `document.cookie=${JSON.stringify(`${TZ_COOKIE}=`)}+encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)+";path=/;max-age=31536000;samesite=lax"`;
+
+/**
+ * store the range the next server render opens on
+ *
+ * @param range range
+ */
+export function rememberRange(range: Range) {
+  document.cookie = `${RANGE_COOKIE}=${range};path=/;max-age=31536000;samesite=lax`;
+}
 
 /**
  * check a value is a known range

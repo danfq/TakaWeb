@@ -1,5 +1,7 @@
 import { cn } from "cn";
-import { duration, filePath, label } from "@/lib/stats/format";
+import { useDuration } from "@/components/dashboard/locale";
+import { useSettings } from "@/lib/settings";
+import { filePath, label, sensitive } from "@/lib/stats/format";
 import type { Dimension, Filter, Item } from "@/lib/stats/types";
 
 /**
@@ -43,6 +45,10 @@ export default function Ranking({
   onFilter,
   project,
 }: RankingProps) {
+  const duration = useDuration();
+  // tooltips would show hidden names in full
+  const hidden = useSettings().hideNames && sensitive(dimension);
+
   if (items.length === 0) {
     return (
       <p className="py-6 text-center text-sm text-muted-foreground">
@@ -69,7 +75,11 @@ export default function Ranking({
                 style={{ background: color }}
               />
 
-              <span className="min-w-0 truncate font-medium" title={item.name}>
+              <span
+                className="min-w-0 truncate font-medium"
+                title={hidden ? undefined : item.name}
+                data-sensitive={sensitive(dimension)}
+              >
                 {file ? file.name : label(dimension, item.name)}
                 {file?.dir && (
                   <span className="ml-1.5 text-xs font-normal text-muted-foreground">
@@ -107,7 +117,9 @@ export default function Ranking({
                 title={
                   active
                     ? "Clear filter"
-                    : `Only show ${label(dimension, item.name)}`
+                    : hidden
+                      ? "Only show this one"
+                      : `Only show ${label(dimension, item.name)}`
                 }
                 className={cn(
                   "w-full rounded-2xl px-2 py-2 text-left transition-colors outline-none hover:bg-muted/60",

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cn } from "cn";
 import {
   Code2,
@@ -14,16 +15,10 @@ import ThemePicker from "@/components/theme/theme-picker";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { ago, label } from "@/lib/stats/format";
+import { useSettings } from "@/lib/settings";
+import { ago, label, sensitive } from "@/lib/stats/format";
 import type { Filter, Latest, Range, Status } from "@/lib/stats/types";
-
-const RANGE_OPTIONS: { value: Range; label: string; short: string }[] = [
-  { value: "today", label: "Today", short: "1D" },
-  { value: "week", label: "7 days", short: "7D" },
-  { value: "month", label: "30 days", short: "30D" },
-  { value: "year", label: "Year", short: "1Y" },
-  { value: "all", label: "All time", short: "All" },
-];
+import { RANGE_OPTIONS } from "@/lib/stats/view";
 
 const FILTER_ICONS: Record<Filter["dimension"], LucideIcon> = {
   project: FolderGit2,
@@ -52,9 +47,10 @@ function LiveIndicator({
   live,
   now,
 }: LiveProps) {
+  const { hideNames } = useSettings();
   let dot = "bg-muted-foreground/50";
   let text: string;
-  let detail: string | null = null;
+  let detail: ReactNode = null;
 
   if (!connected) {
     dot = "bg-amber-500";
@@ -74,7 +70,12 @@ function LiveIndicator({
   } else if (latest && live) {
     dot = "bg-emerald-500";
     text = "Coding now";
-    detail = `${label("project", latest.project)} · ${label("language", latest.language)}`;
+    detail = (
+      <>
+        <span data-sensitive>{label("project", latest.project)}</span> ·{" "}
+        {label("language", latest.language)}
+      </>
+    );
   } else if (latest) {
     text = `Last active ${ago(latest.end, now)}`;
   } else {
@@ -86,9 +87,11 @@ function LiveIndicator({
       role="status"
       className="flex h-8 min-w-0 items-center gap-2 rounded-full bg-muted/60 px-3 text-xs"
       title={
-        latest
-          ? `${latest.file}\n${label("editor", latest.editor)}${latest.branch ? ` on ${latest.branch}` : ""}`
-          : undefined
+        !latest
+          ? undefined
+          : hideNames
+            ? label("editor", latest.editor)
+            : `${latest.file}\n${label("editor", latest.editor)}${latest.branch ? ` on ${latest.branch}` : ""}`
       }
     >
       {loading && connected ? (
@@ -158,7 +161,10 @@ export default function DashboardHeader({
               onClick={() => onFilter(null)}
             >
               <FilterIcon />
-              <span className="truncate">
+              <span
+                className="truncate"
+                data-sensitive={sensitive(filter.dimension)}
+              >
                 {label(filter.dimension, filter.value)}
               </span>
               {pending ? <Spinner /> : <X className="opacity-60" />}

@@ -12,8 +12,8 @@ import {
 import BarChart from "@/components/dashboard/bar-chart";
 import Calendar from "@/components/dashboard/calendar";
 import { SectionBody, TabbedSection } from "@/components/dashboard/section";
-import { change, day, duration } from "@/lib/stats/format";
-import { useLocale } from "@/components/dashboard/locale";
+import { change, day } from "@/lib/stats/format";
+import { useDuration, useLocale } from "@/components/dashboard/locale";
 import { dayPeriod, monthPeriod, samePeriod } from "@/lib/stats/period";
 import type {
   Bucket,
@@ -178,6 +178,7 @@ function Timeline({
   range: Range;
   live: boolean;
 }) {
+  const duration = useDuration();
   const [hovered, setHovered] = useState<number | null>(null);
   const { locale } = useLocale();
   const { activity } = period;
@@ -248,6 +249,7 @@ function YearGraph({
   selected,
   onOpen,
 }: Selection & { snapshot: Snapshot }) {
+  const duration = useDuration();
   const [hovered, setHovered] = useState<string | null>(null);
   const { locale } = useLocale();
   const { calendar, summary } = snapshot;
@@ -319,6 +321,7 @@ export function DayParts({
   hours: number[];
   className?: string;
 }) {
+  const duration = useDuration();
   const { parts, top, total } = dayParts(hours);
 
   return (
@@ -351,6 +354,7 @@ export function DayParts({
  * when in the day the coding happens, with takatime's persona
  */
 function Hours({ period, range }: { period: Period; range: Range }) {
+  const duration = useDuration();
   const [hovered, setHovered] = useState<number | null>(null);
   const { hours } = period;
   const { top, total } = dayParts(hours);

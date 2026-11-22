@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "cn";
 import { Database, Radio, type LucideIcon } from "lucide-react";
 import Activity from "@/components/dashboard/activity";
@@ -10,7 +10,8 @@ import { SectionBody, TabbedSection } from "@/components/dashboard/section";
 import Sessions from "@/components/dashboard/sessions";
 import Summary from "@/components/dashboard/summary";
 import { useStream } from "@/components/dashboard/use-stream";
-import { dayKey } from "@/lib/stats/format";
+import { fixedRange, hour12, useSettings } from "@/lib/settings";
+import { dayKey, duration } from "@/lib/stats/format";
 import type {
   Filter,
   PeriodRange,
@@ -18,7 +19,7 @@ import type {
   Snapshot,
   Status,
 } from "@/lib/stats/types";
-import { RANGE_COOKIE, writeFilter } from "@/lib/stats/view";
+import { rememberRange, writeFilter } from "@/lib/stats/view";
 
 /**
  * a log this recent means the editor is still sending, takatime uploads every minute
@@ -302,25 +303,36 @@ export default function Dashboard(initial: DashboardProps) {
     initial,
   );
   const now = useNow(initial.now, 15_000);
+  const settings = useSettings();
 
   const latest = snapshot?.latest ?? null;
   const live = !!latest && now - latest.end < LIVE_WINDOW;
+
+  const decimal = settings.durations === "decimal";
+  // page title before any live status was added to it
+  const baseTitle = useRef("");
 
   // the server falls back to utc until the timezone cookie exists
   useEffect(() => {
     const browser = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (browser !== tz) setTz(browser);
+
+    baseTitle.current = document.title;
   }, []);
 
-  /**
-   * switch range and remember it for the next server render
-   *
-   * @param next range
-   */
-  const changeRange = (next: Range) => {
-    setRange(next);
-    document.cookie = `${RANGE_COOKIE}=${next};path=/;max-age=31536000;samesite=lax`;
-  };
+  // the next server render opens on the fixed range, or wherever this one was left
+  useEffect(
+    () => rememberRange(fixedRange(settings) ?? range),
+    [range, settings.defaultRange],
+  );
+
+  // today's time in the tab, with a dot while coding
+  useEffect(() => {
+    document.title =
+      settings.tabTitle && snapshot
+        ? `${live ? "● " : ""}${duration(snapshot.summary.today, decimal)} today · ${baseTitle.current}`
+        : baseTitle.current;
+  }, [settings.tabTitle, snapshot, live, decimal]);
 
   /**
    * switch filter and mirror it in the url
@@ -380,7 +392,14 @@ export default function Dashboard(initial: DashboardProps) {
   }
 
   return (
-    <LocaleProvider value={{ locale: initial.locale, tz }}>
+    <LocaleProvider
+      value={{
+        locale: initial.locale,
+        tz,
+        hour12: hour12(settings.timeFormat),
+        decimal,
+      }}
+    >
       <div className="flex min-h-0 flex-1 flex-col">
         <DashboardHeader
           status={status}
@@ -391,7 +410,7 @@ export default function Dashboard(initial: DashboardProps) {
           live={live}
           now={now}
           range={range}
-          onRange={changeRange}
+          onRange={setRange}
           filter={filter}
           onFilter={changeFilter}
         />

@@ -17,10 +17,17 @@ const SYSTEMS: Record<string, string> = {
  * format seconds like takatime does
  *
  * @param seconds duration
+ * @param decimal decimal hours instead, e.g. 3.2h
  *
  * @returns {string} e.g. 3h 12m
  */
-export function duration(seconds: number): string {
+export function duration(seconds: number, decimal = false): string {
+  if (decimal) {
+    if (seconds > 0 && seconds < HOUR / 10) return "<0.1h";
+
+    return `${Number((seconds / HOUR).toFixed(1))}h`;
+  }
+
   if (seconds > 0 && seconds < MINUTE) return "<1m";
 
   const hours = Math.floor(seconds / HOUR);
@@ -79,6 +86,18 @@ export function label(dimension: Dimension | "file", name: string): string {
 }
 
 /**
+ * whether a dimension's values name private work, blurred when names are hidden
+ *
+ * @param dimension dimension
+ *
+ * @returns {true | undefined} true when sensitive, undefined so data attributes are left out
+ */
+export const sensitive = (dimension: Dimension | "file"): true | undefined =>
+  dimension === "project" || dimension === "branch" || dimension === "file"
+    ? true
+    : undefined;
+
+/**
  * shorten a file path to its place inside the project
  *
  * @param path absolute path
@@ -129,14 +148,21 @@ export function day(
  * @param ms epoch ms
  * @param locale bcp 47 locale
  * @param tz iana timezone
+ * @param hour12 12 hour clock, the locale decides when undefined
  *
  * @returns {string} e.g. 14:05
  */
-export const time = (ms: number, locale: string, tz: string): string =>
+export const time = (
+  ms: number,
+  locale: string,
+  tz: string,
+  hour12?: boolean,
+): string =>
   new Date(ms).toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: tz,
+    hour12,
   });
 
 /**

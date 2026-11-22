@@ -8,8 +8,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { useLocale } from "@/components/dashboard/locale";
-import { day, duration } from "@/lib/stats/format";
+import { useDuration, useLocale } from "@/components/dashboard/locale";
+import { day } from "@/lib/stats/format";
 import type { Summary as SummaryData } from "@/lib/stats/types";
 
 /**
@@ -56,6 +56,7 @@ export default function Summary({
   live: boolean;
 }) {
   const { locale } = useLocale();
+  const duration = useDuration();
   const target = summary.average;
   const progress = target ? Math.min(1, summary.today / target) : 0;
 

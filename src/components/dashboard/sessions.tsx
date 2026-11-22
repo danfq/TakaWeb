@@ -1,8 +1,8 @@
 import { cn } from "cn";
 import { GitBranch } from "lucide-react";
 import { Section, SectionBody } from "@/components/dashboard/section";
-import { useLocale } from "@/components/dashboard/locale";
-import { day, dayKey, duration, label, time } from "@/lib/stats/format";
+import { useDuration, useLocale } from "@/components/dashboard/locale";
+import { day, dayKey, label, time } from "@/lib/stats/format";
 import type { Session } from "@/lib/stats/types";
 
 /**
@@ -37,7 +37,8 @@ export function SessionRow({
   // still going, pulses and ends "now"
   live: boolean;
 }) {
-  const { locale, tz } = useLocale();
+  const duration = useDuration();
+  const { locale, tz, hour12 } = useLocale();
 
   return (
     <li className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border/60 py-2.5 last:border-0">
@@ -55,13 +56,13 @@ export function SessionRow({
       </span>
 
       <div className="min-w-0">
-        <div className="truncate text-sm font-medium">
+        <div className="truncate text-sm font-medium" data-sensitive>
           {label("project", session.project)}
         </div>
         <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
           <span className="shrink-0 tabular-nums">
-            {time(session.start, locale, tz)} to{" "}
-            {live ? "now" : time(session.end, locale, tz)}
+            {time(session.start, locale, tz, hour12)} to{" "}
+            {live ? "now" : time(session.end, locale, tz, hour12)}
           </span>
           {session.languages.length > 0 && (
             <span className="truncate">
@@ -74,7 +75,7 @@ export function SessionRow({
           {session.branch && (
             <span className="hidden shrink-0 items-center gap-0.5 @lg:inline-flex">
               · <GitBranch className="size-3" />
-              {session.branch}
+              <span data-sensitive>{session.branch}</span>
             </span>
           )}
           {session.editor && (
@@ -118,6 +119,7 @@ export function SessionDays({
   // sticky headings need the background they scroll over
   headingClassName?: string;
 }) {
+  const duration = useDuration();
   const { locale, tz } = useLocale();
   const days = new Map<string, Session[]>();
 

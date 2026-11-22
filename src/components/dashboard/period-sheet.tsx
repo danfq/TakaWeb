@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { ChevronLeft, TrendingDown, TrendingUp } from "lucide-react";
 import { DayParts } from "@/components/dashboard/activity";
 import BarChart from "@/components/dashboard/bar-chart";
-import { useLocale } from "@/components/dashboard/locale";
+import { useDuration, useLocale } from "@/components/dashboard/locale";
 import Ranking, { rankColor } from "@/components/dashboard/ranking";
 import { SessionDays, SessionRow } from "@/components/dashboard/sessions";
 import { useDetail } from "@/components/dashboard/use-detail";
@@ -15,7 +15,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
-import { change, day, duration, label, time } from "@/lib/stats/format";
+import { change, day, label, sensitive, time } from "@/lib/stats/format";
 import { dayPeriod, isMonth } from "@/lib/stats/period";
 import type {
   Bucket,
@@ -212,7 +212,8 @@ function Insights({
   now: number;
   onPeriod: (period: PeriodRange) => void;
 }) {
-  const { locale, tz } = useLocale();
+  const duration = useDuration();
+  const { locale, tz, hour12 } = useLocale();
   const [hovered, setHovered] = useState<number | null>(null);
 
   const single = detail.unit === "hour";
@@ -280,7 +281,7 @@ function Insights({
             title="Active between"
             value={
               detail.first !== null && detail.last !== null
-                ? `${time(detail.first, locale, tz)} to ${time(detail.last, locale, tz)}`
+                ? `${time(detail.first, locale, tz, hour12)} to ${time(detail.last, locale, tz, hour12)}`
                 : "-"
             }
           >
@@ -298,8 +299,14 @@ function Insights({
         )}
 
         <Stat title="Sessions" value={detail.sessionCount}>
-          {detail.longest &&
-            `Longest ${duration(detail.longest.seconds)}, ${label("project", detail.longest.project)}`}
+          {detail.longest && (
+            <>
+              Longest {duration(detail.longest.seconds)},{" "}
+              <span data-sensitive>
+                {label("project", detail.longest.project)}
+              </span>
+            </>
+          )}
         </Stat>
 
         <Stat
@@ -461,9 +468,16 @@ export default function PeriodSheet({
   const pending = !current && !failed;
   const live = !!period && shown.to >= today;
 
-  const filter = shown.view.filter
-    ? `${label(shown.view.filter.dimension, shown.view.filter.value)} only`
-    : "Everything";
+  const filter = shown.view.filter ? (
+    <span>
+      <span data-sensitive={sensitive(shown.view.filter.dimension)}>
+        {label(shown.view.filter.dimension, shown.view.filter.value)}
+      </span>{" "}
+      only
+    </span>
+  ) : (
+    "Everything"
+  );
 
   return (
     <Sheet
