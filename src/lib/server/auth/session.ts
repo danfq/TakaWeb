@@ -1,22 +1,22 @@
-import { createHash, randomBytes } from "node:crypto";
-import type { AstroCookies } from "astro";
-import { TAKAWEB_URL } from "astro:env/server";
-import { db } from "@/lib/server/db";
+import { createHash, randomBytes } from "node:crypto"
+import type { AstroCookies } from "astro"
+import { TAKAWEB_URL } from "astro:env/server"
+import { db } from "@/lib/server/db"
 
-export const SESSION_COOKIE = "takaweb_session";
+export const SESSION_COOKIE = "takaweb_session"
 
-const DAY = 24 * 60 * 60 * 1000;
+const DAY = 24 * 60 * 60 * 1000
 
 /**
  * session lifetime, renewed once less than half remains
  */
-const SESSION_TTL = 30 * DAY;
-const RENEW_THRESHOLD = SESSION_TTL / 2;
+const SESSION_TTL = 30 * DAY
+const RENEW_THRESHOLD = SESSION_TTL / 2
 
-export type User = { id: number; username: string };
-export type Session = { id: string; userId: number; expiresAt: number };
+export type User = { id: number; username: string }
+export type Session = { id: string; userId: number; expiresAt: number }
 
-type CookieContext = { cookies: AstroCookies; url: URL };
+type CookieContext = { cookies: AstroCookies; url: URL }
 
 /**
  * hash a session token, only hashes are stored
@@ -25,8 +25,7 @@ type CookieContext = { cookies: AstroCookies; url: URL };
  *
  * @returns {string} session id
  */
-const toSessionId = (token: string): string =>
-  createHash("sha256").update(token).digest("hex");
+const toSessionId = (token: string): string => createHash("sha256").update(token).digest("hex")
 
 /**
  * create a session for a user
@@ -36,20 +35,23 @@ const toSessionId = (token: string): string =>
  * @returns {{ token: string; expiresAt: number }} raw token and expiry
  */
 export function createSession(userId: number): {
-  token: string;
-  expiresAt: number;
+  token: string
+  expiresAt: number
 } {
-  const token = randomBytes(32).toString("base64url");
-  const now = Date.now();
-  const expiresAt = now + SESSION_TTL;
+  const token = randomBytes(32).toString("base64url")
+  const now = Date.now()
+  const expiresAt = now + SESSION_TTL
 
   // prune expired sessions on the way
-  db.prepare("DELETE FROM session WHERE expires_at <= ?").run(now);
-  db.prepare(
-    "INSERT INTO session (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
-  ).run(toSessionId(token), userId, expiresAt, now);
+  db.prepare("DELETE FROM session WHERE expires_at <= ?").run(now)
+  db.prepare("INSERT INTO session (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)").run(
+    toSessionId(token),
+    userId,
+    expiresAt,
+    now
+  )
 
-  return { token, expiresAt };
+  return { token, expiresAt }
 }
 
 /**
@@ -59,46 +61,39 @@ export function createSession(userId: number): {
  *
  * @returns {{ session: Session; user: User; renewed: boolean } | null} session or null
  */
-export function validateSession(
-  token: string,
-): { session: Session; user: User; renewed: boolean } | null {
-  const id = toSessionId(token);
+export function validateSession(token: string): { session: Session; user: User; renewed: boolean } | null {
+  const id = toSessionId(token)
   const row = db
     .prepare(
       `SELECT session.user_id, session.expires_at, user.username
        FROM session
        INNER JOIN user ON user.id = session.user_id
-       WHERE session.id = ?`,
+       WHERE session.id = ?`
     )
-    .get(id) as
-    | { user_id: number; expires_at: number; username: string }
-    | undefined;
+    .get(id) as { user_id: number; expires_at: number; username: string } | undefined
 
-  if (!row) return null;
+  if (!row) return null
 
-  const now = Date.now();
+  const now = Date.now()
 
   if (now >= row.expires_at) {
-    invalidateSession(id);
-    return null;
+    invalidateSession(id)
+    return null
   }
 
-  let expiresAt = row.expires_at;
-  const renewed = expiresAt - now < RENEW_THRESHOLD;
+  let expiresAt = row.expires_at
+  const renewed = expiresAt - now < RENEW_THRESHOLD
 
   if (renewed) {
-    expiresAt = now + SESSION_TTL;
-    db.prepare("UPDATE session SET expires_at = ? WHERE id = ?").run(
-      expiresAt,
-      id,
-    );
+    expiresAt = now + SESSION_TTL
+    db.prepare("UPDATE session SET expires_at = ? WHERE id = ?").run(expiresAt, id)
   }
 
   return {
     session: { id, userId: row.user_id, expiresAt },
     user: { id: row.user_id, username: row.username },
     renewed,
-  };
+  }
 }
 
 /**
@@ -107,7 +102,7 @@ export function validateSession(
  * @param id session id
  */
 export function invalidateSession(id: string) {
-  db.prepare("DELETE FROM session WHERE id = ?").run(id);
+  db.prepare("DELETE FROM session WHERE id = ?").run(id)
 }
 
 /**
@@ -118,7 +113,7 @@ export function invalidateSession(id: string) {
  * @returns {boolean} whether cookies should be secure
  */
 const isSecure = (url: URL): boolean =>
-  (TAKAWEB_URL ? new URL(TAKAWEB_URL).protocol : url.protocol) === "https:";
+  (TAKAWEB_URL ? new URL(TAKAWEB_URL).protocol : url.protocol) === "https:"
 
 /**
  * set the session cookie
@@ -127,18 +122,14 @@ const isSecure = (url: URL): boolean =>
  * @param token raw session token
  * @param expiresAt expiry timestamp
  */
-export function setSessionCookie(
-  { cookies, url }: CookieContext,
-  token: string,
-  expiresAt: number,
-) {
+export function setSessionCookie({ cookies, url }: CookieContext, token: string, expiresAt: number) {
   cookies.set(SESSION_COOKIE, token, {
     path: "/",
     httpOnly: true,
     sameSite: "lax",
     secure: isSecure(url),
     expires: new Date(expiresAt),
-  });
+  })
 }
 
 /**
@@ -152,5 +143,5 @@ export function deleteSessionCookie({ cookies, url }: CookieContext) {
     httpOnly: true,
     sameSite: "lax",
     secure: isSecure(url),
-  });
+  })
 }

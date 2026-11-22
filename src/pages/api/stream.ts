@@ -1,13 +1,13 @@
-import type { APIRoute } from "astro";
-import { isTimeZone } from "@/lib/server/stats/days";
-import { join } from "@/lib/server/stats/hub";
-import type { View } from "@/lib/stats/types";
-import { readFilter } from "@/lib/stats/view";
+import type { APIRoute } from "astro"
+import { isTimeZone } from "@/lib/server/stats/days"
+import { join } from "@/lib/server/stats/hub"
+import type { View } from "@/lib/stats/types"
+import { readFilter } from "@/lib/stats/view"
 
 /**
  * keep proxies from closing an idle stream
  */
-const HEARTBEAT = 15_000;
+const HEARTBEAT = 15_000
 
 /**
  * read the view from the query string, falling back to safe defaults
@@ -17,26 +17,26 @@ const HEARTBEAT = 15_000;
  * @returns {View} view
  */
 function parseView(params: URLSearchParams): View {
-  const tz = params.get("tz") ?? "";
+  const tz = params.get("tz") ?? ""
 
   return {
     tz: isTimeZone(tz) ? tz : "UTC",
     filter: readFilter(params),
-  };
+  }
 }
 
 /**
  * live dashboard snapshots over server-sent events
  */
 export const GET: APIRoute = ({ url, request }) => {
-  const view = parseView(url.searchParams);
-  const encoder = new TextEncoder();
+  const view = parseView(url.searchParams)
+  const encoder = new TextEncoder()
 
-  let cleanup = () => {};
+  let cleanup = () => {}
 
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
-      let closed = false;
+      let closed = false
 
       /**
        * write a raw chunk, tearing down once the client is gone
@@ -44,41 +44,39 @@ export const GET: APIRoute = ({ url, request }) => {
        * @param chunk sse text
        */
       const write = (chunk: string) => {
-        if (closed) return;
+        if (closed) return
 
         try {
-          controller.enqueue(encoder.encode(chunk));
+          controller.enqueue(encoder.encode(chunk))
         } catch {
-          cleanup();
+          cleanup()
         }
-      };
+      }
 
       // reconnect quickly after a drop
-      write("retry: 3000\n\n");
+      write("retry: 3000\n\n")
 
-      const leave = join(view, (event, data) =>
-        write(`event: ${event}\ndata: ${data}\n\n`),
-      );
-      const heartbeat = setInterval(() => write(": ping\n\n"), HEARTBEAT);
+      const leave = join(view, (event, data) => write(`event: ${event}\ndata: ${data}\n\n`))
+      const heartbeat = setInterval(() => write(": ping\n\n"), HEARTBEAT)
 
       cleanup = () => {
-        if (closed) return;
-        closed = true;
+        if (closed) return
+        closed = true
 
-        clearInterval(heartbeat);
-        leave();
+        clearInterval(heartbeat)
+        leave()
 
         try {
-          controller.close();
+          controller.close()
         } catch {}
-      };
+      }
 
-      request.signal.addEventListener("abort", cleanup, { once: true });
+      request.signal.addEventListener("abort", cleanup, { once: true })
     },
     cancel() {
-      cleanup();
+      cleanup()
     },
-  });
+  })
 
   return new Response(body, {
     headers: {
@@ -87,5 +85,5 @@ export const GET: APIRoute = ({ url, request }) => {
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
     },
-  });
-};
+  })
+}

@@ -1,7 +1,7 @@
-import type { Dimension } from "@/lib/stats/types";
+import type { Dimension } from "@/lib/stats/types"
 
-const MINUTE = 60;
-const HOUR = 60 * MINUTE;
+const MINUTE = 60
+const HOUR = 60 * MINUTE
 
 /**
  * pretty names for the os values takatime records
@@ -11,7 +11,7 @@ const SYSTEMS: Record<string, string> = {
   linux: "Linux",
   windows: "Windows",
   freebsd: "FreeBSD",
-};
+}
 
 /**
  * format seconds like takatime does
@@ -23,17 +23,17 @@ const SYSTEMS: Record<string, string> = {
  */
 export function duration(seconds: number, decimal = false): string {
   if (decimal) {
-    if (seconds > 0 && seconds < HOUR / 10) return "<0.1h";
+    if (seconds > 0 && seconds < HOUR / 10) return "<0.1h"
 
-    return `${Number((seconds / HOUR).toFixed(1))}h`;
+    return `${Number((seconds / HOUR).toFixed(1))}h`
   }
 
-  if (seconds > 0 && seconds < MINUTE) return "<1m";
+  if (seconds > 0 && seconds < MINUTE) return "<1m"
 
-  const hours = Math.floor(seconds / HOUR);
-  const minutes = Math.floor((seconds % HOUR) / MINUTE);
+  const hours = Math.floor(seconds / HOUR)
+  const minutes = Math.floor((seconds % HOUR) / MINUTE)
 
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
 }
 
 /**
@@ -45,11 +45,11 @@ export function duration(seconds: number, decimal = false): string {
  */
 export function shortDuration(seconds: number): string {
   if (seconds >= HOUR) {
-    const hours = seconds / HOUR;
-    return `${Number.isInteger(hours) ? hours : hours.toFixed(1)}h`;
+    const hours = seconds / HOUR
+    return `${Number.isInteger(hours) ? hours : hours.toFixed(1)}h`
   }
 
-  return `${Math.round(seconds / MINUTE)}m`;
+  return `${Math.round(seconds / MINUTE)}m`
 }
 
 /**
@@ -61,13 +61,13 @@ export function shortDuration(seconds: number): string {
  * @returns {string} e.g. 5m ago
  */
 export function ago(ms: number, now: number): string {
-  const seconds = Math.max(0, (now - ms) / 1000);
+  const seconds = Math.max(0, (now - ms) / 1000)
 
-  if (seconds < MINUTE) return "just now";
-  if (seconds < HOUR) return `${Math.floor(seconds / MINUTE)}m ago`;
-  if (seconds < 24 * HOUR) return `${Math.floor(seconds / HOUR)}h ago`;
+  if (seconds < MINUTE) return "just now"
+  if (seconds < HOUR) return `${Math.floor(seconds / MINUTE)}m ago`
+  if (seconds < 24 * HOUR) return `${Math.floor(seconds / HOUR)}h ago`
 
-  return `${Math.floor(seconds / (24 * HOUR))}d ago`;
+  return `${Math.floor(seconds / (24 * HOUR))}d ago`
 }
 
 /**
@@ -79,10 +79,10 @@ export function ago(ms: number, now: number): string {
  * @returns {string} label
  */
 export function label(dimension: Dimension | "file", name: string): string {
-  if (!name || name.toLowerCase() === "unknown") return "Unknown";
-  if (dimension === "os") return SYSTEMS[name.toLowerCase()] ?? name;
+  if (!name || name.toLowerCase() === "unknown") return "Unknown"
+  if (dimension === "os") return SYSTEMS[name.toLowerCase()] ?? name
 
-  return name;
+  return name
 }
 
 /**
@@ -93,9 +93,7 @@ export function label(dimension: Dimension | "file", name: string): string {
  * @returns {true | undefined} true when sensitive, undefined so data attributes are left out
  */
 export const sensitive = (dimension: Dimension | "file"): true | undefined =>
-  dimension === "project" || dimension === "branch" || dimension === "file"
-    ? true
-    : undefined;
+  dimension === "project" || dimension === "branch" || dimension === "file" ? true : undefined
 
 /**
  * shorten a file path to its place inside the project
@@ -105,18 +103,15 @@ export const sensitive = (dimension: Dimension | "file"): true | undefined =>
  *
  * @returns {{ name: string; dir: string }} file name and its directory
  */
-export function filePath(
-  path: string,
-  project?: string,
-): { name: string; dir: string } {
-  const parts = path.split(/[\\/]/).filter(Boolean);
-  const name = parts.pop() ?? path;
+export function filePath(path: string, project?: string): { name: string; dir: string } {
+  const parts = path.split(/[\\/]/).filter(Boolean)
+  const name = parts.pop() ?? path
 
   // keep what follows the project folder, or the last couple of folders
-  const at = project ? parts.lastIndexOf(project) : -1;
-  const dir = at >= 0 ? parts.slice(at) : parts.slice(-2);
+  const at = project ? parts.lastIndexOf(project) : -1
+  const dir = at >= 0 ? parts.slice(at) : parts.slice(-2)
 
-  return { name, dir: dir.join("/") };
+  return { name, dir: dir.join("/") }
 }
 
 /**
@@ -135,11 +130,11 @@ export function day(
     weekday: "short",
     month: "short",
     day: "numeric",
-  },
+  }
 ): string {
-  const date = new Date(`${key.length === 7 ? `${key}-01` : key}T00:00:00Z`);
+  const date = new Date(`${key.length === 7 ? `${key}-01` : key}T00:00:00Z`)
 
-  return date.toLocaleDateString(locale, { ...options, timeZone: "UTC" });
+  return date.toLocaleDateString(locale, { ...options, timeZone: "UTC" })
 }
 
 /**
@@ -152,18 +147,13 @@ export function day(
  *
  * @returns {string} e.g. 14:05
  */
-export const time = (
-  ms: number,
-  locale: string,
-  tz: string,
-  hour12?: boolean,
-): string =>
+export const time = (ms: number, locale: string, tz: string, hour12?: boolean): string =>
   new Date(ms).toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: tz,
     hour12,
-  });
+  })
 
 /**
  * format an hour of the day, already in the dashboard's timezone
@@ -175,18 +165,13 @@ export const time = (
  *
  * @returns {string} e.g. 14:00, or 14 when short
  */
-export const hour = (
-  key: string | number,
-  locale: string,
-  hour12?: boolean,
-  short = false,
-): string =>
+export const hour = (key: string | number, locale: string, hour12?: boolean, short = false): string =>
   new Date(Date.UTC(2000, 0, 1, Number(key) % 24)).toLocaleTimeString(locale, {
     hour: short ? "numeric" : "2-digit",
     minute: short ? undefined : "2-digit",
     timeZone: "UTC",
     hour12,
-  });
+  })
 
 /**
  * calendar day an instant falls on
@@ -197,7 +182,7 @@ export const hour = (
  * @returns {string} YYYY-MM-DD
  */
 export const dayKey = (ms: number, tz: string): string =>
-  new Date(ms).toLocaleDateString("en-CA", { timeZone: tz });
+  new Date(ms).toLocaleDateString("en-CA", { timeZone: tz })
 
 /**
  * percent change between two values
@@ -207,7 +192,5 @@ export const dayKey = (ms: number, tz: string): string =>
  *
  * @returns {number | null} change ratio, null when there is no baseline
  */
-export const change = (
-  current: number,
-  previous: number | null,
-): number | null => (previous ? (current - previous) / previous : null);
+export const change = (current: number, previous: number | null): number | null =>
+  previous ? (current - previous) / previous : null

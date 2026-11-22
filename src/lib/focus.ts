@@ -11,7 +11,7 @@ const NAVIGATION_KEYS = [
   "End",
   "PageUp",
   "PageDown",
-];
+]
 
 /**
  * marks the page as keyboard driven after a navigation key, and pointer driven after any press
@@ -26,11 +26,11 @@ export const FOCUS_SCRIPT = `(() => {
   addEventListener("pointerdown", () => {
     delete root.dataset.focus;
   }, true);
-})();`;
+})();`
 
 /**
  * switch to keyboard mode, for shortcuts that move focus such as opening a sheet
  */
 export function keyboardMode() {
-  document.documentElement.dataset.focus = "keyboard";
+  document.documentElement.dataset.focus = "keyboard"
 }

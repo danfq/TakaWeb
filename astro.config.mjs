@@ -1,11 +1,11 @@
-import { defineConfig, envField } from "astro/config";
-import react from "@astrojs/react";
+import { defineConfig, envField } from "astro/config"
+import react from "@astrojs/react"
 
-import tailwindcss from "@tailwindcss/vite";
+import tailwindcss from "@tailwindcss/vite"
 
-import node from "@astrojs/node";
+import node from "@astrojs/node"
 
-import boot from "./src/integrations/boot";
+import boot from "./src/integrations/boot"
 
 // https://astro.build/config
 export default defineConfig({
@@ -42,4 +42,4 @@ export default defineConfig({
       }),
     },
   },
-});
+})

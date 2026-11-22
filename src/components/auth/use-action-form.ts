@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from "react";
-import { isInputError, type ActionError } from "astro:actions";
+import { useState, type FormEvent } from "react"
+import { isInputError, type ActionError } from "astro:actions"
 
-type FormAction = (input: FormData) => Promise<{ error?: ActionError }>;
+type FormAction = (input: FormData) => Promise<{ error?: ActionError }>
 
-type FieldErrors = Record<string, { message: string }[] | undefined>;
+type FieldErrors = Record<string, { message: string }[] | undefined>
 
 /**
  * submit a form to an astro action and track its state
@@ -14,25 +14,25 @@ type FieldErrors = Record<string, { message: string }[] | undefined>;
  * @returns form state and submit handler
  */
 export function useActionForm(action: FormAction, redirect: string) {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [fields, setFields] = useState<FieldErrors>({});
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [fields, setFields] = useState<FieldErrors>({})
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+    event.preventDefault()
 
-    setPending(true);
-    setError(null);
-    setFields({});
+    setPending(true)
+    setError(null)
+    setFields({})
 
-    const { error } = await action(new FormData(event.currentTarget));
+    const { error } = await action(new FormData(event.currentTarget))
 
     if (!error) {
-      window.location.assign(redirect);
-      return;
+      window.location.assign(redirect)
+      return
     }
 
-    setPending(false);
+    setPending(false)
 
     if (isInputError(error)) {
       setFields(
@@ -40,13 +40,13 @@ export function useActionForm(action: FormAction, redirect: string) {
           Object.entries(error.fields).map(([field, messages]) => [
             field,
             messages?.map((message) => ({ message })),
-          ]),
-        ),
-      );
+          ])
+        )
+      )
     } else {
-      setError(error.message);
+      setError(error.message)
     }
   }
 
-  return { pending, error, fields, onSubmit };
+  return { pending, error, fields, onSubmit }
 }

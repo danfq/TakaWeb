@@ -1,7 +1,7 @@
-import { mkdirSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { TAKAWEB_DATA_DIR } from "astro:env/server";
+import { mkdirSync } from "node:fs"
+import { join, resolve } from "node:path"
+import { DatabaseSync } from "node:sqlite"
+import { TAKAWEB_DATA_DIR } from "astro:env/server"
 
 /**
  * schema migrations, applied in order and tracked via user_version
@@ -44,7 +44,7 @@ const migrations = [
   `
   CREATE INDEX imported_log_start ON imported_log (source, start);
   `,
-];
+]
 
 /**
  * run a callback inside a write transaction
@@ -55,16 +55,16 @@ const migrations = [
  * @returns {T} callback result
  */
 export function transaction<T>(database: DatabaseSync, fn: () => T): T {
-  database.exec("BEGIN IMMEDIATE");
+  database.exec("BEGIN IMMEDIATE")
 
   try {
-    const result = fn();
-    database.exec("COMMIT");
+    const result = fn()
+    database.exec("COMMIT")
 
-    return result;
+    return result
   } catch (error) {
-    database.exec("ROLLBACK");
-    throw error;
+    database.exec("ROLLBACK")
+    throw error
   }
 }
 
@@ -74,15 +74,13 @@ export function transaction<T>(database: DatabaseSync, fn: () => T): T {
  * @param database target database
  */
 function migrate(database: DatabaseSync) {
-  const { user_version: version } = database
-    .prepare("PRAGMA user_version")
-    .get() as { user_version: number };
+  const { user_version: version } = database.prepare("PRAGMA user_version").get() as { user_version: number }
 
   for (let index = version; index < migrations.length; index++) {
     transaction(database, () => {
-      database.exec(migrations[index]);
-      database.exec(`PRAGMA user_version = ${index + 1}`);
-    });
+      database.exec(migrations[index])
+      database.exec(`PRAGMA user_version = ${index + 1}`)
+    })
   }
 }
 
@@ -92,25 +90,25 @@ function migrate(database: DatabaseSync) {
  * @returns {DatabaseSync} database
  */
 function open(): DatabaseSync {
-  const dir = resolve(TAKAWEB_DATA_DIR);
-  mkdirSync(dir, { recursive: true });
+  const dir = resolve(TAKAWEB_DATA_DIR)
+  mkdirSync(dir, { recursive: true })
 
-  const database = new DatabaseSync(join(dir, "takaweb.db"));
+  const database = new DatabaseSync(join(dir, "takaweb.db"))
   database.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
     PRAGMA busy_timeout = 5000;
-  `);
+  `)
 
-  migrate(database);
+  migrate(database)
 
-  return database;
+  return database
 }
 
 // reuse the handle across dev reloads
-const globals = globalThis as typeof globalThis & { __takawebDb?: DatabaseSync };
+const globals = globalThis as typeof globalThis & { __takawebDb?: DatabaseSync }
 
-export const db = (globals.__takawebDb ??= open());
+export const db = (globals.__takawebDb ??= open())
 
 // a reused handle still picks up migrations added since it opened
-migrate(db);
+migrate(db)

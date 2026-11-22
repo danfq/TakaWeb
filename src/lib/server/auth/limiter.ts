@@ -1,16 +1,16 @@
 /**
  * failed attempts allowed per key within the window
  */
-const MAX_ATTEMPTS = 10;
-const WINDOW = 15 * 60 * 1000;
+const MAX_ATTEMPTS = 10
+const WINDOW = 15 * 60 * 1000
 
-type Attempts = { count: number; resetAt: number };
+type Attempts = { count: number; resetAt: number }
 
 const globals = globalThis as typeof globalThis & {
-  __takawebAttempts?: Map<string, Attempts>;
-};
+  __takawebAttempts?: Map<string, Attempts>
+}
 
-const attempts = (globals.__takawebAttempts ??= new Map());
+const attempts = (globals.__takawebAttempts ??= new Map())
 
 /**
  * check whether a key ran out of attempts
@@ -20,15 +20,15 @@ const attempts = (globals.__takawebAttempts ??= new Map());
  * @returns {boolean} whether it is limited
  */
 export function isLimited(key: string): boolean {
-  const entry = attempts.get(key);
-  if (!entry) return false;
+  const entry = attempts.get(key)
+  if (!entry) return false
 
   if (Date.now() >= entry.resetAt) {
-    attempts.delete(key);
-    return false;
+    attempts.delete(key)
+    return false
   }
 
-  return entry.count >= MAX_ATTEMPTS;
+  return entry.count >= MAX_ATTEMPTS
 }
 
 /**
@@ -37,20 +37,20 @@ export function isLimited(key: string): boolean {
  * @param key limiter key
  */
 export function recordFailure(key: string) {
-  const now = Date.now();
-  const entry = attempts.get(key);
+  const now = Date.now()
+  const entry = attempts.get(key)
 
   // keep the map from growing unbounded
   if (attempts.size > 1000) {
-    for (const [k, v] of attempts) if (now >= v.resetAt) attempts.delete(k);
+    for (const [k, v] of attempts) if (now >= v.resetAt) attempts.delete(k)
   }
 
   if (!entry || now >= entry.resetAt) {
-    attempts.set(key, { count: 1, resetAt: now + WINDOW });
-    return;
+    attempts.set(key, { count: 1, resetAt: now + WINDOW })
+    return
   }
 
-  entry.count++;
+  entry.count++
 }
 
 /**
@@ -59,5 +59,5 @@ export function recordFailure(key: string) {
  * @param key limiter key
  */
 export function clearFailures(key: string) {
-  attempts.delete(key);
+  attempts.delete(key)
 }

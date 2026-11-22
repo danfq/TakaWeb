@@ -1,10 +1,8 @@
-import { fileURLToPath } from "node:url";
-import type { AstroIntegration } from "astro";
-import { isRunnableDevEnvironment, type ViteDevServer } from "vite";
+import { fileURLToPath } from "node:url"
+import type { AstroIntegration } from "astro"
+import { isRunnableDevEnvironment, type ViteDevServer } from "vite"
 
-const BOOT_MODULE = fileURLToPath(
-  new URL("../lib/server/boot.ts", import.meta.url),
-);
+const BOOT_MODULE = fileURLToPath(new URL("../lib/server/boot.ts", import.meta.url))
 
 /**
  * run the server boot module on startup instead of on first request
@@ -13,13 +11,13 @@ const BOOT_MODULE = fileURLToPath(
  * @returns {AstroIntegration} integration
  */
 export default function boot(): AstroIntegration {
-  let server: ViteDevServer | undefined;
+  let server: ViteDevServer | undefined
 
   return {
     name: "takaweb:boot",
     hooks: {
       "astro:config:setup": ({ command, updateConfig }) => {
-        if (command !== "build") return;
+        if (command !== "build") return
 
         updateConfig({
           vite: {
@@ -31,31 +29,31 @@ export default function boot(): AstroIntegration {
                 // append to the node adapter entry, after astro:env is initialized
                 transform(code, id) {
                   if (!/@astrojs[\\/]node[\\/]dist[\\/]server\.js$/.test(id)) {
-                    return;
+                    return
                   }
 
-                  return `${code}\nawait import(${JSON.stringify(BOOT_MODULE)});\n`;
+                  return `${code}\nawait import(${JSON.stringify(BOOT_MODULE)});\n`
                 },
               },
             ],
           },
-        });
+        })
       },
 
       "astro:server:setup": (options) => {
-        server = options.server;
+        server = options.server
       },
 
       "astro:server:start": async ({ logger }) => {
-        const ssr = server?.environments.ssr;
+        const ssr = server?.environments.ssr
 
         if (!ssr || !isRunnableDevEnvironment(ssr)) {
-          logger.warn("ssr environment is not runnable, boot deferred to first request");
-          return;
+          logger.warn("ssr environment is not runnable, boot deferred to first request")
+          return
         }
 
-        await ssr.runner.import(BOOT_MODULE);
+        await ssr.runner.import(BOOT_MODULE)
       },
     },
-  };
+  }
 }

@@ -1,58 +1,35 @@
-import { actions } from "astro:actions";
-import { CircleAlert, KeyRound } from "lucide-react";
-import { Alert, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
-import { useActionForm } from "@/components/auth/use-action-form";
+import { actions } from "astro:actions"
+import { CircleAlert, KeyRound } from "lucide-react"
+import { Alert, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
+import { useActionForm } from "@/components/auth/use-action-form"
 
 /**
  * first-boot form to claim the admin account
  */
 export default function SetupForm() {
-  const { pending, error, fields, onSubmit } = useActionForm(
-    actions.auth.setup,
-    "/",
-  );
+  const { pending, error, fields, onSubmit } = useActionForm(actions.auth.setup, "/")
 
   return (
     <Card className="w-full max-w-sm">
       <CardHeader>
-        <div className="mb-2 flex size-10 items-center justify-center rounded-full bg-muted">
+        <div className="bg-muted mb-2 flex size-10 items-center justify-center rounded-full">
           <KeyRound className="size-5" />
         </div>
         <CardTitle className="text-lg">Create admin account</CardTitle>
         <CardDescription>
-          Paste the one-time setup token printed to the server console, then
-          choose a password.
+          Paste the one-time setup token printed to the server console, then choose a password.
         </CardDescription>
       </CardHeader>
 
       <CardContent>
         <form onSubmit={onSubmit}>
           {/* lets password managers save the credential */}
-          <input
-            type="text"
-            name="username"
-            value="admin"
-            autoComplete="username"
-            readOnly
-            hidden
-          />
+          <input type="text" name="username" value="admin" autoComplete="username" readOnly hidden />
 
           <FieldGroup>
             {error && (
@@ -117,5 +94,5 @@ export default function SetupForm() {
         </form>
       </CardContent>
     </Card>
-  );
+  )
 }
