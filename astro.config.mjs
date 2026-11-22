@@ -34,6 +34,14 @@ export default defineConfig({
         access: "secret",
         default: "data",
       }),
+      // proxies in front of takaweb, client addresses are read from x-forwarded-for past them
+      TAKAWEB_TRUSTED_PROXIES: envField.number({
+        context: "server",
+        access: "secret",
+        int: true,
+        min: 0,
+        default: 0,
+      }),
       // takatime mongo, ideally as a read-only user
       MONGO_URI: envField.string({
         context: "server",

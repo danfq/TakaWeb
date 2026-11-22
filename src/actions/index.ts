@@ -1,16 +1,18 @@
 import { ActionError, defineAction, type ActionAPIContext } from "astro:actions"
 import { z } from "astro/zod"
 import { createAdmin, getAdmin, hasAdmin, verifySetupToken } from "@/lib/server/auth/admin"
-import { clearFailures, isLimited, recordFailure } from "@/lib/server/auth/limiter"
 import { hashPassword, verifyPassword } from "@/lib/server/auth/password"
 import {
   createSession,
   deleteSessionCookie,
   invalidateSession,
   setSessionCookie,
+  type Session,
   type User,
 } from "@/lib/server/auth/session"
+import { clientIp } from "@/lib/server/client"
 import { importHeartbeats, importedCount, removeImported } from "@/lib/server/imports"
+import { limits, type Limiter } from "@/lib/server/limiter"
 import { resetSettings, updateSettings } from "@/lib/server/settings"
 import { importsChanged } from "@/lib/server/stats/store"
 import { LookupError, lookupAgents } from "@/lib/server/wakatime"
@@ -54,28 +56,77 @@ const settingsChanges = z
  *
  * @param context action context
  *
- * @returns {User} user
+ * @returns {{ user: User; session: Session }} user and session
  */
-function assertUser(context: ActionAPIContext): User {
-  if (!context.locals.user) {
+function assertUser(context: ActionAPIContext): { user: User; session: Session } {
+  const { user, session } = context.locals
+
+  if (!user || !session) {
     throw new ActionError({ code: "UNAUTHORIZED", message: "Sign in first" })
   }
 
-  return context.locals.user
+  return { user, session }
 }
 
 /**
- * reject a request once its key ran out of attempts
+ * describe a wait for people
  *
- * @param key limiter key
+ * @param wait ms to wait
+ *
+ * @returns {string} e.g. in 3 minutes
  */
-function assertNotLimited(key: string) {
-  if (isLimited(key)) {
+function waitFor(wait: number): string {
+  const minutes = Math.ceil(wait / 60_000)
+
+  if (wait < 60_000) return "in a moment"
+
+  return `in ${minutes} minute${minutes === 1 ? "" : "s"}`
+}
+
+/**
+ * reject a request once its key ran out of hits
+ *
+ * @param limiter limiter
+ * @param key limiter key
+ * @param count whether this request counts as a hit
+ */
+function assertNotLimited(limiter: Limiter, key: string, count = false) {
+  const wait = count ? limiter.take(key) : limiter.wait(key)
+
+  if (wait) {
     throw new ActionError({
       code: "TOO_MANY_REQUESTS",
-      message: "Too many attempts, try again in a few minutes",
+      message: `Too many attempts, try again ${waitFor(wait)}`,
     })
   }
+}
+
+/**
+ * gate a sign in style attempt by client address, and by everyone at once
+ *
+ * @param context action context
+ *
+ * @returns {string} client address
+ */
+function assertCanAttempt(context: ActionAPIContext): string {
+  const ip = clientIp(context)
+
+  assertNotLimited(limits.authFailures, ip)
+  assertNotLimited(limits.authAttempts, ip, true)
+  assertNotLimited(limits.authGlobal, "all", true)
+
+  return ip
+}
+
+/**
+ * sign a user in on this browser
+ *
+ * @param context action context
+ * @param userId user id
+ */
+function signIn(context: ActionAPIContext, userId: number) {
+  const { token, expiresAt } = createSession(userId)
+  setSessionCookie(context, token, expiresAt)
 }
 
 export const server = {
@@ -96,8 +147,7 @@ export const server = {
           path: ["confirm"],
         }),
       handler: async (input, context) => {
-        const key = `setup:${context.clientAddress}`
-        assertNotLimited(key)
+        const ip = assertCanAttempt(context)
 
         if (hasAdmin()) {
           throw new ActionError({
@@ -107,7 +157,7 @@ export const server = {
         }
 
         if (!verifySetupToken(input.token)) {
-          recordFailure(key)
+          limits.authFailures.hit(ip)
 
           throw new ActionError({
             code: "UNAUTHORIZED",
@@ -125,11 +175,10 @@ export const server = {
           })
         }
 
-        clearFailures(key)
+        limits.authFailures.reset(ip)
         console.log("[takaweb] admin account created")
 
-        const { token, expiresAt } = createSession(adminId)
-        setSessionCookie(context, token, expiresAt)
+        signIn(context, adminId)
       },
     }),
 
@@ -142,13 +191,11 @@ export const server = {
         password: z.string().min(1, "Enter your password").max(128),
       }),
       handler: async (input, context) => {
-        const key = `login:${context.clientAddress}`
-        assertNotLimited(key)
-
+        const ip = assertCanAttempt(context)
         const admin = getAdmin()
 
         if (!admin || !(await verifyPassword(input.password, admin.passwordHash))) {
-          recordFailure(key)
+          limits.authFailures.hit(ip)
 
           throw new ActionError({
             code: "UNAUTHORIZED",
@@ -156,10 +203,8 @@ export const server = {
           })
         }
 
-        clearFailures(key)
-
-        const { token, expiresAt } = createSession(admin.id)
-        setSessionCookie(context, token, expiresAt)
+        limits.authFailures.reset(ip)
+        signIn(context, admin.id)
       },
     }),
 
@@ -172,6 +217,7 @@ export const server = {
         deleteSessionCookie(context)
       },
     }),
+
   },
 
   settings: {
@@ -180,14 +226,24 @@ export const server = {
      */
     update: defineAction({
       input: settingsChanges,
-      handler: (input, context) => updateSettings(assertUser(context).id, input),
+      handler: (input, context) => {
+        const { user, session } = assertUser(context)
+        assertNotLimited(limits.requests, session.id, true)
+
+        return updateSettings(user.id, input)
+      },
     }),
 
     /**
      * put every setting back to its default
      */
     reset: defineAction({
-      handler: (_, context) => resetSettings(assertUser(context).id),
+      handler: (_, context) => {
+        const { user, session } = assertUser(context)
+        assertNotLimited(limits.requests, session.id, true)
+
+        return resetSettings(user.id)
+      },
     }),
   },
 
@@ -197,7 +253,8 @@ export const server = {
      */
     status: defineAction({
       handler: (_, context) => {
-        assertUser(context)
+        const { session } = assertUser(context)
+        assertNotLimited(limits.requests, session.id, true)
 
         return { imported: importedCount() }
       },
@@ -209,7 +266,8 @@ export const server = {
     agents: defineAction({
       input: z.object({ token: z.string().trim().min(1).max(512) }),
       handler: async (input, context) => {
-        assertUser(context)
+        const { session } = assertUser(context)
+        assertNotLimited(limits.wakatimeLookups, session.id, true)
 
         try {
           return await lookupAgents(input.token)
@@ -230,7 +288,8 @@ export const server = {
     import: defineAction({
       input: z.object({ heartbeats: z.array(importHeartbeat).max(IMPORT_BATCH) }),
       handler: (input, context) => {
-        assertUser(context)
+        const { session } = assertUser(context)
+        assertNotLimited(limits.importBatches, session.id, true)
 
         const result = importHeartbeats(input.heartbeats)
         if (result.added) importsChanged()
@@ -244,7 +303,8 @@ export const server = {
      */
     remove: defineAction({
       handler: (_, context) => {
-        assertUser(context)
+        const { session } = assertUser(context)
+        assertNotLimited(limits.heavy, session.id, true)
 
         const removed = removeImported()
         if (removed) importsChanged()
