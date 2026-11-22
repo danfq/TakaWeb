@@ -2,6 +2,8 @@
 import MainLayout from "@/layouts/main.astro"
 import Dashboard from "@/components/dashboard/dashboard"
 import { preferredLocale } from "@/lib/server/locale"
+import { getSettings } from "@/lib/server/settings"
+import { fixedRange } from "@/lib/settings"
 import { isTimeZone } from "@/lib/server/stats/days"
 import { initial } from "@/lib/server/stats/hub"
 import { DEFAULT_RANGE, RANGE_COOKIE, TZ_COOKIE, isRange, readFilter } from "@/lib/stats/view"
@@ -16,6 +18,11 @@ const view = {
 }
 
 const { snapshot, status } = await initial(view)
+
+// the middleware only lets signed in visitors through
+const user = Astro.locals.user!
+
+const settings = getSettings(user.id)
 ---
 
 <MainLayout app>
@@ -23,10 +30,11 @@ const { snapshot, status } = await initial(view)
     client:load
     snapshot={snapshot}
     status={status}
-    range={isRange(range) ? range : DEFAULT_RANGE}
+    range={fixedRange(settings) ?? (isRange(range) ? range : DEFAULT_RANGE)}
     filter={view.filter}
     tz={view.tz}
     locale={preferredLocale(Astro.request.headers.get("accept-language"))}
     now={Date.now()}
+    settings={settings}
   />
 </MainLayout>

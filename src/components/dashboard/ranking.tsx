@@ -1,6 +1,6 @@
 import { cn } from "cn"
 import { useDuration } from "@/components/dashboard/locale"
-import { useNamesHidden } from "@/lib/settings"
+import { useNamesHidden } from "@/components/settings/settings-store"
 import { filePath, label, sensitive } from "@/lib/stats/format"
 import type { Dimension, Filter, Item } from "@/lib/stats/types"
 

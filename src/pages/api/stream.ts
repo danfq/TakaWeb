@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro"
+import { getSettings, onSettings } from "@/lib/server/settings"
 import { isTimeZone } from "@/lib/server/stats/days"
 import { join } from "@/lib/server/stats/hub"
 import type { View } from "@/lib/stats/types"
@@ -26,9 +27,12 @@ function parseView(params: URLSearchParams): View {
 }
 
 /**
- * live dashboard snapshots over server-sent events
+ * live dashboard snapshots and settings over server-sent events
  */
-export const GET: APIRoute = ({ url, request }) => {
+export const GET: APIRoute = ({ url, request, locals }) => {
+  // the middleware only lets signed in requests through
+  const user = locals.user!
+
   const view = parseView(url.searchParams)
   const encoder = new TextEncoder()
 
@@ -53,10 +57,24 @@ export const GET: APIRoute = ({ url, request }) => {
         }
       }
 
+      /**
+       * write one event
+       *
+       * @param event event name
+       * @param data json payload
+       */
+      const send = (event: string, data: string) => write(`event: ${event}\ndata: ${data}\n\n`)
+
       // reconnect quickly after a drop
       write("retry: 3000\n\n")
 
-      const leave = join(view, (event, data) => write(`event: ${event}\ndata: ${data}\n\n`))
+      // settings first, a reconnect may have missed changes
+      send("settings", JSON.stringify(getSettings(user.id)))
+
+      const leave = join(view, send)
+      const unsubscribe = onSettings((owner, settings) => {
+        if (owner === user.id) send("settings", JSON.stringify(settings))
+      })
       const heartbeat = setInterval(() => write(": ping\n\n"), HEARTBEAT)
 
       cleanup = () => {
@@ -65,6 +83,7 @@ export const GET: APIRoute = ({ url, request }) => {
 
         clearInterval(heartbeat)
         leave()
+        unsubscribe()
 
         try {
           controller.close()

@@ -21,9 +21,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
+import { useSettings, useSettingsError, useSettingsStore } from "@/components/settings/settings-store"
 import WakatimeImport from "@/components/settings/wakatime-import"
 import { keyboardMode } from "@/lib/focus"
-import { DEFAULT_SETTINGS, resetSettings, updateSettings, useSettings, type Settings } from "@/lib/settings"
+import { DEFAULT_SETTINGS, type Settings } from "@/lib/settings"
 import { RANGE_OPTIONS } from "@/lib/stats/view"
 
 /**
@@ -93,6 +94,7 @@ function SettingField({
   option: (typeof SETTINGS_OPTIONS)[number]
   value: Settings[keyof Settings]
 }) {
+  const { update } = useSettingsStore()
   const id = `setting-${option.id}`
 
   return option.choices ? (
@@ -105,7 +107,7 @@ function SettingField({
         spacing={0}
         className="bg-muted rounded-full p-1"
         value={[String(value)]}
-        onValueChange={(next) => next[0] && updateSettings({ [option.id]: next[0] } as Partial<Settings>)}>
+        onValueChange={(next) => next[0] && update({ [option.id]: next[0] } as Partial<Settings>)}>
         {option.choices.map((choice) => (
           <ToggleGroupItem
             key={choice.value}
@@ -128,7 +130,7 @@ function SettingField({
       <Switch
         id={id}
         checked={value === true}
-        onCheckedChange={(checked) => updateSettings({ [option.id]: checked } as Partial<Settings>)}
+        onCheckedChange={(checked) => update({ [option.id]: checked } as Partial<Settings>)}
       />
     </Field>
   )
@@ -155,6 +157,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 export default function SettingsSheet() {
   const [open, setOpen] = useState(false)
   const settings = useSettings()
+  const error = useSettingsError()
+  const { reset } = useSettingsStore()
   // filled in after mount, the server cannot know the platform
   const [shortcut, setShortcut] = useState<{
     label: string
@@ -204,7 +208,7 @@ export default function SettingsSheet() {
       <SheetContent resizable storageKey="takaweb-settings-width">
         <SheetHeader className="pr-36">
           <SheetTitle>Settings</SheetTitle>
-          <SheetDescription>Saved in this browser.</SheetDescription>
+          <SheetDescription>Synced across your devices.</SheetDescription>
         </SheetHeader>
 
         {/* lines up with the close button */}
@@ -214,13 +218,19 @@ export default function SettingsSheet() {
           className="text-muted-foreground absolute top-4 right-14"
           disabled={!changed}
           title="Reset settings to their defaults"
-          onClick={resetSettings}>
+          onClick={reset}>
           <RotateCcw />
           Reset
         </Button>
 
         {/* sized to fit, only scrolls as a last resort on very short screens */}
         <div className="flex min-h-0 flex-1 scrollbar-thin flex-col gap-9 overflow-y-auto px-6 pt-2 pb-6">
+          {error && (
+            <p role="alert" className="text-destructive -mb-5">
+              {error}
+            </p>
+          )}
+
           {SECTIONS.map((section) => (
             <Section key={section} title={section}>
               {SETTINGS_OPTIONS.filter((option) => option.section === section).map((option) => (

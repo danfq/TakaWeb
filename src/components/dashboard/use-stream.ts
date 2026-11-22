@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import type { Settings } from "@/lib/settings"
 import type { Snapshot, Status, View } from "@/lib/stats/types"
 import { writeFilter } from "@/lib/stats/view"
 
@@ -12,10 +13,15 @@ const RETRY = 3000
  *
  * @param view view to subscribe to
  * @param initial snapshot and status the page was rendered with
+ * @param onSettings called with settings saved anywhere, including on every connect
  *
  * @returns latest snapshot, server status, whether the stream is up and whether the snapshot is for another view
  */
-export function useStream(view: View, initial: { snapshot: Snapshot | null; status: Status }) {
+export function useStream(
+  view: View,
+  initial: { snapshot: Snapshot | null; status: Status },
+  onSettings: (settings: Settings) => void
+) {
   const [snapshot, setSnapshot] = useState(initial.snapshot)
   const [status, setStatus] = useState(initial.status)
   const [connected, setConnected] = useState(true)
@@ -45,6 +51,9 @@ export function useStream(view: View, initial: { snapshot: Snapshot | null; stat
       source.addEventListener("status", (event) =>
         setStatus(JSON.parse((event as MessageEvent<string>).data))
       )
+      source.addEventListener("settings", (event) =>
+        onSettings(JSON.parse((event as MessageEvent<string>).data))
+      )
 
       source.addEventListener("error", async () => {
         setConnected(false)
@@ -73,7 +82,8 @@ export function useStream(view: View, initial: { snapshot: Snapshot | null; stat
       clearTimeout(retry)
       source.close()
     }
-  }, [tz, dimension, value])
+    // onSettings comes from a store that lives as long as the page
+  }, [tz, dimension, value, onSettings])
 
   // a snapshot for a previous filter stays up until the new one lands
   const stale =

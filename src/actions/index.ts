@@ -8,10 +8,13 @@ import {
   deleteSessionCookie,
   invalidateSession,
   setSessionCookie,
+  type User,
 } from "@/lib/server/auth/session"
 import { importHeartbeats, importedCount, removeImported } from "@/lib/server/imports"
+import { resetSettings, updateSettings } from "@/lib/server/settings"
 import { importsChanged } from "@/lib/server/stats/store"
 import { LookupError, lookupAgents } from "@/lib/server/wakatime"
+import { CHOICES } from "@/lib/settings"
 import { IMPORT_BATCH, IMPORT_LIMITS } from "@/lib/wakatime"
 
 /**
@@ -34,14 +37,31 @@ const importHeartbeat = z.object({
 })
 
 /**
+ * settings a change may carry, any subset of them
+ */
+const settingsChanges = z
+  .object({
+    timeFormat: z.enum(CHOICES.timeFormat),
+    durations: z.enum(CHOICES.durations),
+    defaultRange: z.enum(CHOICES.defaultRange),
+    hideNames: z.boolean(),
+    tabTitle: z.boolean(),
+  })
+  .partial()
+
+/**
  * reject a request without a signed in admin
  *
  * @param context action context
+ *
+ * @returns {User} user
  */
-function assertUser(context: ActionAPIContext) {
+function assertUser(context: ActionAPIContext): User {
   if (!context.locals.user) {
     throw new ActionError({ code: "UNAUTHORIZED", message: "Sign in first" })
   }
+
+  return context.locals.user
 }
 
 /**
@@ -151,6 +171,23 @@ export const server = {
         if (context.locals.session) invalidateSession(context.locals.session.id)
         deleteSessionCookie(context)
       },
+    }),
+  },
+
+  settings: {
+    /**
+     * change some settings, every open dashboard picks them up
+     */
+    update: defineAction({
+      input: settingsChanges,
+      handler: (input, context) => updateSettings(assertUser(context).id, input),
+    }),
+
+    /**
+     * put every setting back to its default
+     */
+    reset: defineAction({
+      handler: (_, context) => resetSettings(assertUser(context).id),
     }),
   },
 

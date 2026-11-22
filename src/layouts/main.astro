@@ -3,7 +3,7 @@ import "@/styles/global.css"
 import { cn } from "cn"
 import Header from "@/components/layout/header.astro"
 import { FOCUS_SCRIPT } from "@/lib/focus"
-import { SETTINGS_SCRIPT } from "@/lib/settings"
+import { getSettings } from "@/lib/server/settings"
 import { TZ_SCRIPT } from "@/lib/stats/view"
 import { THEME_SCRIPT, themeCss } from "@/lib/themes"
 
@@ -14,9 +14,14 @@ interface Props {
 }
 
 const { title, app = false } = Astro.props
+const { user } = Astro.locals
+
+// rendered from the stored settings, so hidden names never flash
+const hideNames = !!user && getSettings(user.id).hideNames
 ---
 
-<html lang="en">
+{/* english only for now, other languages are planned */}
+<html lang="en" data-private={hideNames ? "" : undefined}>
   <head>
     {/* meta */}
     <meta charset="utf-8" />
@@ -30,8 +35,6 @@ const { title, app = false } = Astro.props
     <script is:inline set:html={TZ_SCRIPT} />
     {/* focus outlines for keyboard navigation only */}
     <script is:inline set:html={FOCUS_SCRIPT} />
-    {/* settings that style the page before first paint */}
-    <script is:inline set:html={SETTINGS_SCRIPT} />
     {/* icons & fonts */}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" href="/favicon.ico" />

@@ -81,6 +81,14 @@ const migrations: (string | ((database: DatabaseSync) => void))[] = [
       database.exec("ALTER TABLE imported_heartbeat ADD COLUMN boundary INTEGER NOT NULL DEFAULT 0")
     }
   },
+  // settings follow the account across devices, stored as one json document
+  `
+  CREATE TABLE setting (
+    user_id INTEGER PRIMARY KEY REFERENCES user (id) ON DELETE CASCADE,
+    data TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  `,
 ]
 
 /**

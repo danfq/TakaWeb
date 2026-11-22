@@ -10,7 +10,8 @@ import { SectionBody, TabbedSection } from "@/components/dashboard/section"
 import Sessions from "@/components/dashboard/sessions"
 import Summary from "@/components/dashboard/summary"
 import { useStream } from "@/components/dashboard/use-stream"
-import { fixedRange, hour12, useSettings } from "@/lib/settings"
+import { SettingsProvider, useSettings, useSettingsStore } from "@/components/settings/settings-store"
+import { hour12, type Settings } from "@/lib/settings"
 import { dayKey, duration } from "@/lib/stats/format"
 import type { Filter, PeriodRange, Range, Snapshot, Status } from "@/lib/stats/types"
 import { rememberRange, writeFilter } from "@/lib/stats/view"
@@ -40,6 +41,7 @@ export type DashboardProps = {
   tz: string
   locale: string
   now: number
+  settings: Settings
 }
 
 /**
@@ -260,16 +262,28 @@ function Board({
 }
 
 /**
- * the live takatime dashboard
+ * the live takatime dashboard, with the settings it was rendered with
  */
 export default function Dashboard(initial: DashboardProps) {
+  return (
+    <SettingsProvider initial={initial.settings}>
+      <DashboardView {...initial} />
+    </SettingsProvider>
+  )
+}
+
+/**
+ * the dashboard itself
+ */
+function DashboardView(initial: DashboardProps) {
   const [range, setRange] = useState(initial.range)
   const [filter, setFilter] = useState(initial.filter)
   const [tz, setTz] = useState(initial.tz)
   // periods open in the details sheet, drilled into from left to right
   const [periods, setPeriods] = useState<PeriodRange[]>([])
 
-  const { snapshot, status, connected, stale } = useStream({ tz, filter }, initial)
+  const store = useSettingsStore()
+  const { snapshot, status, connected, stale } = useStream({ tz, filter }, initial, store.receive)
   const now = useNow(initial.now, 15_000)
   const settings = useSettings()
 
@@ -288,8 +302,8 @@ export default function Dashboard(initial: DashboardProps) {
     baseTitle.current = document.title
   }, [])
 
-  // the next server render opens on the fixed range, or wherever this one was left
-  useEffect(() => rememberRange(fixedRange(settings) ?? range), [range, settings.defaultRange])
+  // the next server render opens wherever this one was left, unless settings fix a range
+  useEffect(() => rememberRange(range), [range])
 
   // today's time in the tab, with a dot while coding
   useEffect(() => {
