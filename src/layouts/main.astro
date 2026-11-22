@@ -3,6 +3,7 @@ import "@/styles/global.css";
 import { cn } from "cn";
 import Header from "@/components/layout/header.astro";
 import { FOCUS_SCRIPT } from "@/lib/focus";
+import { SETTINGS_SCRIPT } from "@/lib/settings";
 import { TZ_SCRIPT } from "@/lib/stats/view";
 import { THEME_SCRIPT, themeCss } from "@/lib/themes";
 
@@ -31,6 +32,9 @@ const { title, app = false } = Astro.props;
 
     {/* focus outlines for keyboard navigation only */}
     <script is:inline set:html={FOCUS_SCRIPT} />
+
+    {/* settings that style the page before first paint */}
+    <script is:inline set:html={SETTINGS_SCRIPT} />
 
     {/* icons & fonts */}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
