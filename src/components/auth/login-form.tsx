@@ -3,7 +3,7 @@ import { CircleAlert, LockKeyhole } from "lucide-react"
 import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { useActionForm } from "@/components/auth/use-action-form"
@@ -56,6 +56,9 @@ export default function LoginForm() {
                 {pending && <Spinner />}
                 Sign in
               </Button>
+              <FieldDescription className="text-center text-xs">
+                Forgot it? Run <code>takaweb reset-password</code> on the server.
+              </FieldDescription>
             </Field>
           </FieldGroup>
         </form>

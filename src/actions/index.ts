@@ -1,11 +1,13 @@
 import { ActionError, defineAction, type ActionAPIContext } from "astro:actions"
 import { z } from "astro/zod"
-import { createAdmin, getAdmin, hasAdmin, verifySetupToken } from "@/lib/server/auth/admin"
+import { PASSWORD_MAX, PASSWORD_MIN } from "@/lib/account"
+import { createAdmin, getAdmin, hasAdmin, setPasswordHash, verifySetupToken } from "@/lib/server/auth/admin"
 import { hashPassword, verifyPassword } from "@/lib/server/auth/password"
 import {
   createSession,
   deleteSessionCookie,
   invalidateSession,
+  revokeOtherSessions,
   setSessionCookie,
   type Session,
   type User,
@@ -22,7 +24,10 @@ import { IMPORT_BATCH, IMPORT_LIMITS } from "@/lib/wakatime"
 /**
  * password policy, capped to keep hashing cheap
  */
-const password = z.string().min(12, "Use at least 12 characters").max(128, "Use at most 128 characters")
+const password = z
+  .string()
+  .min(PASSWORD_MIN, `Use at least ${PASSWORD_MIN} characters`)
+  .max(PASSWORD_MAX, `Use at most ${PASSWORD_MAX} characters`)
 
 /**
  * a wakatime heartbeat as sent by the import, see ImportHeartbeat
@@ -188,7 +193,7 @@ export const server = {
     login: defineAction({
       accept: "form",
       input: z.object({
-        password: z.string().min(1, "Enter your password").max(128),
+        password: z.string().min(1, "Enter your password").max(PASSWORD_MAX),
       }),
       handler: async (input, context) => {
         const ip = assertCanAttempt(context)
@@ -218,6 +223,57 @@ export const server = {
       },
     }),
 
+    /**
+     * change the admin password, which signs out every other session
+     * a forgotten password can only be reset from the command line
+     */
+    changePassword: defineAction({
+      accept: "form",
+      input: z
+        .object({
+          current: z.string().min(1, "Enter your current password").max(PASSWORD_MAX),
+          password,
+          confirm: z.string(),
+        })
+        .refine((input) => input.password === input.confirm, {
+          message: "Passwords do not match",
+          path: ["confirm"],
+        }),
+      handler: async (input, context) => {
+        const { user, session } = assertUser(context)
+        const ip = clientIp(context)
+
+        assertNotLimited(limits.passwordFailures, session.id)
+        assertNotLimited(limits.authFailures, ip)
+
+        const admin = getAdmin()
+
+        if (!admin || admin.id !== user.id || !(await verifyPassword(input.current, admin.passwordHash))) {
+          limits.passwordFailures.hit(session.id)
+          limits.authFailures.hit(ip)
+
+          throw new ActionError({
+            code: "UNAUTHORIZED",
+            message: "Your current password is incorrect",
+          })
+        }
+
+        if (input.current === input.password) {
+          throw new ActionError({
+            code: "BAD_REQUEST",
+            message: "Choose a password that differs from the current one",
+          })
+        }
+
+        setPasswordHash(user.id, await hashPassword(input.password))
+        limits.passwordFailures.reset(session.id)
+
+        const revoked = revokeOtherSessions(user.id, session.id)
+        console.log("[takaweb] admin password changed")
+
+        return { revoked }
+      },
+    }),
   },
 
   settings: {

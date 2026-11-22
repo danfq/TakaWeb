@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { RotateCcw, Settings as SettingsIcon } from "lucide-react"
+import { KeyRound, RotateCcw, Settings as SettingsIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Field,
@@ -9,6 +9,7 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
+  FieldTitle,
 } from "@/components/ui/field"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
@@ -21,6 +22,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
+import PasswordDialog from "@/components/settings/password-dialog"
 import { useSettings, useSettingsError, useSettingsStore } from "@/components/settings/settings-store"
 import WakatimeImport from "@/components/settings/wakatime-import"
 import { keyboardMode } from "@/lib/focus"
@@ -152,6 +154,31 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /**
+ * the account password
+ */
+function AccountSection() {
+  const [changing, setChanging] = useState(false)
+
+  return (
+    <Section title="Account">
+      <Field orientation="horizontal">
+        <FieldContent>
+          <FieldTitle>Password</FieldTitle>
+          <FieldDescription>Changing it signs out every other session.</FieldDescription>
+        </FieldContent>
+
+        <Button variant="secondary" size="sm" onClick={() => setChanging(true)}>
+          <KeyRound />
+          Change
+        </Button>
+
+        <PasswordDialog open={changing} onOpenChange={setChanging} onChanged={() => {}} />
+      </Field>
+    </Section>
+  )
+}
+
+/**
  * settings sidebar, also opens with cmd or ctrl + comma
  */
 export default function SettingsSheet() {
@@ -238,6 +265,8 @@ export default function SettingsSheet() {
               ))}
             </Section>
           ))}
+
+          <AccountSection />
 
           <Section title="Data">
             <WakatimeImport />

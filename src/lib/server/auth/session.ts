@@ -106,6 +106,20 @@ export function invalidateSession(id: string) {
 }
 
 /**
+ * sign out every session of a user except one
+ *
+ * @param userId user id
+ * @param keepId session to keep, null signs out all of them
+ *
+ * @returns {number} sessions revoked
+ */
+export function revokeOtherSessions(userId: number, keepId: string | null): number {
+  const { changes } = db.prepare("DELETE FROM session WHERE user_id = ? AND id IS NOT ?").run(userId, keepId)
+
+  return Number(changes)
+}
+
+/**
  * only mark cookies secure when served over https
  *
  * @param url request url

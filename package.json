@@ -12,14 +12,15 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && bun build scripts/takaweb.ts --target=node --outfile=dist/takaweb.mjs",
     "preview": "astro preview",
     "start": "node dist/server/entry.mjs",
     "check": "astro check && prettier --check .",
     "fmt": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "astro": "astro"
+    "astro": "astro",
+    "takaweb": "bun scripts/takaweb.ts"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.14",

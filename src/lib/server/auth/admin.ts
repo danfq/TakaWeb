@@ -87,6 +87,20 @@ export function createAdmin(passwordHash: string): number | null {
 }
 
 /**
+ * replace a user's password hash
+ *
+ * @param userId user id
+ * @param passwordHash encoded password hash
+ *
+ * @returns {boolean} whether the user exists
+ */
+export function setPasswordHash(userId: number, passwordHash: string): boolean {
+  const { changes } = db.prepare("UPDATE user SET password_hash = ? WHERE id = ?").run(passwordHash, userId)
+
+  return changes > 0
+}
+
+/**
  * check a setup token in constant time
  *
  * @param token token from the setup form
