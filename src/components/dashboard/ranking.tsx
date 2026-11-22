@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import { useDuration } from "@/components/dashboard/locale";
-import { useSettings } from "@/lib/settings";
+import { useNamesHidden } from "@/lib/settings";
 import { filePath, label, sensitive } from "@/lib/stats/format";
 import type { Dimension, Filter, Item } from "@/lib/stats/types";
 
@@ -47,7 +47,7 @@ export default function Ranking({
 }: RankingProps) {
   const duration = useDuration();
   // tooltips would show hidden names in full
-  const hidden = useSettings().hideNames && sensitive(dimension);
+  const hidden = useNamesHidden() && sensitive(dimension);
 
   if (items.length === 0) {
     return (

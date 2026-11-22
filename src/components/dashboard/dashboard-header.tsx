@@ -15,7 +15,7 @@ import ThemePicker from "@/components/theme/theme-picker";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useSettings } from "@/lib/settings";
+import { useNamesHidden } from "@/lib/settings";
 import { ago, label, sensitive } from "@/lib/stats/format";
 import type { Filter, Latest, Range, Status } from "@/lib/stats/types";
 import { RANGE_OPTIONS } from "@/lib/stats/view";
@@ -47,7 +47,7 @@ function LiveIndicator({
   live,
   now,
 }: LiveProps) {
-  const { hideNames } = useSettings();
+  const hideNames = useNamesHidden();
   let dot = "bg-muted-foreground/50";
   let text: string;
   let detail: ReactNode = null;

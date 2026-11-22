@@ -54,6 +54,8 @@ const listeners = new Set<() => void>()
 // raw value the cached settings were parsed from, keeps snapshots stable
 let raw: string | null = null
 let cached: Settings = DEFAULT_SETTINGS
+// changes storage refused to keep, they win over what it holds until a write succeeds
+let override: Settings | null = null
 
 /**
  * read the stored settings, falling back to defaults for anything missing or invalid
@@ -61,6 +63,8 @@ let cached: Settings = DEFAULT_SETTINGS
  * @returns {Settings} settings
  */
 function read(): Settings {
+  if (override) return override
+
   let next: string | null = null
 
   try {
@@ -128,7 +132,12 @@ function onStorage(event: StorageEvent) {
  * @returns {() => void} unsubscribe
  */
 function subscribe(callback: () => void): () => void {
-  if (!listeners.size) addEventListener("storage", onStorage)
+  if (!listeners.size) {
+    addEventListener("storage", onStorage)
+    // another tab may have changed settings after the head script ran, before anything listened
+    apply(read())
+  }
+
   listeners.add(callback)
 
   return () => {
@@ -143,15 +152,14 @@ function subscribe(callback: () => void): () => void {
  * @param changes settings to change
  */
 export function updateSettings(changes: Partial<Settings>) {
+  const next = { ...read(), ...changes }
+
   try {
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ ...read(), ...changes }))
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next))
+    override = null
   } catch {
-    // storage is blocked, keep the change for this page only
-    raw = null
-    cached = { ...cached, ...changes }
-    apply(cached)
-    listeners.forEach((listener) => listener())
-    return
+    // storage refused the write, keep the change for this page only
+    override = next
   }
 
   emit()
@@ -163,11 +171,11 @@ export function updateSettings(changes: Partial<Settings>) {
 export function resetSettings() {
   try {
     localStorage.removeItem(SETTINGS_STORAGE_KEY)
-  } catch {}
+    override = null
+  } catch {
+    override = DEFAULT_SETTINGS
+  }
 
-  // also covers blocked storage, which always reads as nothing stored
-  raw = null
-  cached = DEFAULT_SETTINGS
   emit()
 }
 
@@ -177,6 +185,24 @@ export function resetSettings() {
  * @returns {Settings} settings
  */
 export const useSettings = (): Settings => useSyncExternalStore(subscribe, read, () => DEFAULT_SETTINGS)
+
+// the stored settings are only readable once hydrated
+const hydrated = () => true
+const rendering = () => false
+const unchanging = () => () => {}
+
+/**
+ * whether names should stay out of plain attributes such as tooltips
+ * assumed while server rendering and hydrating, since the stored setting is unknown until then
+ *
+ * @returns {boolean} whether names are hidden
+ */
+export function useNamesHidden(): boolean {
+  const { hideNames } = useSettings()
+  const ready = useSyncExternalStore(unchanging, hydrated, rendering)
+
+  return !ready || hideNames
+}
 
 /**
  * hour12 option for a time format, undefined lets the locale decide
