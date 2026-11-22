@@ -21,10 +21,11 @@ const { user } = Astro.locals
 const hideNames = !!user && getSettings(user.id).hideNames
 
 // astro only hashes what it bundles, the inline head code is allowed by hash here
+// there is no policy, nor csp, while developing
 const themes = themeCss()
 
-for (const script of [THEME_SCRIPT, TZ_SCRIPT, FOCUS_SCRIPT]) Astro.csp.insertScriptHash(cspHash(script))
-Astro.csp.insertStyleHash(cspHash(themes))
+for (const script of [THEME_SCRIPT, TZ_SCRIPT, FOCUS_SCRIPT]) Astro.csp?.insertScriptHash(cspHash(script))
+Astro.csp?.insertStyleHash(cspHash(themes))
 ---
 
 {/* english only for now, other languages are planned */}
