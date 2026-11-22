@@ -20,15 +20,35 @@ import { Spinner } from "@/components/ui/spinner";
 export default function LogoutButton() {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function logout() {
     setPending(true);
-    await actions.auth.logout();
-    window.location.assign("/login");
+    setError(null);
+
+    try {
+      const { error: failure } = await actions.auth.logout();
+      if (!failure) return window.location.assign("/login");
+
+      setError(failure.message);
+    } catch {
+      // the request never completed, so the session is likely still active
+      setError("Could not reach TakaWeb, check your connection and try again");
+    }
+
+    setPending(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !pending && setOpen(next)}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (pending) return;
+
+        setOpen(next);
+        setError(null);
+      }}
+    >
       <DialogTrigger
         render={
           <Button
@@ -49,6 +69,12 @@ export default function LogoutButton() {
             You will need your password to sign back in.
           </DialogDescription>
         </DialogHeader>
+
+        {error && (
+          <p role="alert" className="text-destructive">
+            {error}
+          </p>
+        )}
 
         <DialogFooter>
           <DialogClose
