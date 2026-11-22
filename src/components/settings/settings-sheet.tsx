@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { actions } from "astro:actions"
-import { KeyRound, RotateCcw, Settings as SettingsIcon } from "lucide-react"
+import { KeyRound, MonitorSmartphone, RotateCcw, Settings as SettingsIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Field,
@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/sheet"
 import DataExport from "@/components/settings/data-export"
 import PasswordDialog from "@/components/settings/password-dialog"
-import SessionList from "@/components/settings/session-list"
+import SessionsDialog from "@/components/settings/sessions-dialog"
 import { useSettings, useSettingsError, useSettingsStore } from "@/components/settings/settings-store"
 import WakatimeImport from "@/components/settings/wakatime-import"
 import type { Account, SessionInfo } from "@/lib/account"
@@ -168,6 +168,7 @@ function AccountSection({
   onSessions: (sessions: SessionInfo[]) => void
 }) {
   const [changing, setChanging] = useState(false)
+  const [listing, setListing] = useState(false)
 
   /**
    * show the sessions left after a password change signed the others out
@@ -195,13 +196,25 @@ function AccountSection({
         <PasswordDialog open={changing} onOpenChange={setChanging} onChanged={refresh} />
       </Field>
 
-      <Field>
+      <Field orientation="horizontal">
         <FieldContent>
           <FieldTitle>Sessions</FieldTitle>
-          <FieldDescription>Browsers signed in to TakaWeb.</FieldDescription>
+          <FieldDescription>
+            {sessions.length === 1 ? "Only this browser is" : `${sessions.length} browsers are`} signed in.
+          </FieldDescription>
         </FieldContent>
 
-        <SessionList sessions={sessions} onSessions={onSessions} />
+        <Button variant="secondary" size="sm" onClick={() => setListing(true)}>
+          <MonitorSmartphone />
+          Manage
+        </Button>
+
+        <SessionsDialog
+          open={listing}
+          onOpenChange={setListing}
+          sessions={sessions}
+          onSessions={onSessions}
+        />
       </Field>
     </Section>
   )

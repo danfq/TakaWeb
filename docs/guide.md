@@ -122,7 +122,7 @@ A reset signs out every session. It reads the database from `TAKAWEB_DATA_DIR`, 
 
 ### Sessions
 
-Signing in keeps you signed in for 30 days, renewed as you use TakaWeb. **Settings → Account → Sessions** lists every browser that is signed in, with its address, browser and when it signed in. You can sign out any of them except the one you are using, or all others at once.
+Signing in keeps you signed in for 30 days, renewed as you use TakaWeb. **Settings → Account → Sessions → Manage** lists every browser that is signed in, with its address, browser and when it signed in. You can sign out any of them except the one you are using, or all others at once.
 
 ### Rate limits
 

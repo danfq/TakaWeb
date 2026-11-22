@@ -3,6 +3,15 @@ import { actions } from "astro:actions"
 import { LogOut, Monitor } from "lucide-react"
 import { useLocale } from "@/components/dashboard/locale"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
 import { describeAgent, type SessionInfo } from "@/lib/account"
 
@@ -80,10 +89,14 @@ function SessionRow({
 /**
  * every signed in session, any but this one can be signed out
  */
-export default function SessionList({
+export default function SessionsDialog({
+  open,
+  onOpenChange,
   sessions,
   onSessions,
 }: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   sessions: SessionInfo[]
   onSessions: (sessions: SessionInfo[]) => void
 }) {
@@ -116,35 +129,49 @@ export default function SessionList({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <ul className="divide-border flex flex-col divide-y">
-        {sessions.map((session) => (
-          <SessionRow
-            key={session.id}
-            session={session}
-            busy={busy !== null}
-            onRevoke={() => revoke(session.id)}
-          />
-        ))}
-      </ul>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next)
+        setError(null)
+      }}>
+      {/* a single shrinkable column, so long user agents truncate instead of widening the dialog */}
+      <DialogContent className="grid-cols-[minmax(0,1fr)] gap-5 sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Sessions</DialogTitle>
+          <DialogDescription>
+            Browsers signed in to TakaWeb. Sign out any you do not recognize.
+          </DialogDescription>
+        </DialogHeader>
 
-      {error && (
-        <p role="alert" className="text-destructive text-xs">
-          {error}
-        </p>
-      )}
+        {/* many sessions scroll here, the dialog itself stays on screen */}
+        <ul className="divide-border -mr-2 flex max-h-[min(55svh,26rem)] scrollbar-thin flex-col divide-y overflow-y-auto pr-2">
+          {sessions.map((session) => (
+            <SessionRow
+              key={session.id}
+              session={session}
+              busy={busy !== null}
+              onRevoke={() => revoke(session.id)}
+            />
+          ))}
+        </ul>
 
-      {others > 0 && (
-        <Button
-          variant="secondary"
-          size="sm"
-          className="self-start"
-          disabled={busy !== null}
-          onClick={() => revoke("others")}>
-          {busy === "others" ? <Spinner /> : <LogOut />}
-          Sign out {others === 1 ? "the other session" : `all ${others} other sessions`}
-        </Button>
-      )}
-    </div>
+        {error && (
+          <p role="alert" className="text-destructive">
+            {error}
+          </p>
+        )}
+
+        <DialogFooter>
+          {others > 0 && (
+            <Button variant="secondary" disabled={busy !== null} onClick={() => revoke("others")}>
+              {busy === "others" ? <Spinner /> : <LogOut />}
+              Sign out {others === 1 ? "the other session" : `all ${others} others`}
+            </Button>
+          )}
+          <DialogClose render={<Button />}>Done</DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
