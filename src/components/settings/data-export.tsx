@@ -1,6 +1,12 @@
-import { Download } from "lucide-react"
-import { buttonVariants } from "@/components/ui/button"
-import { FieldContent, FieldDescription, FieldTitle, Field } from "@/components/ui/field"
+import { ChevronDown, Download } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Field, FieldContent, FieldDescription, FieldTitle } from "@/components/ui/field"
 import { EXPORT_FORMATS } from "@/lib/export"
 
 /**
@@ -8,27 +14,31 @@ import { EXPORT_FORMATS } from "@/lib/export"
  */
 export default function DataExport() {
   return (
-    <Field orientation="horizontal" className="flex-wrap gap-y-3">
-      <FieldContent className="min-w-48">
+    <Field orientation="horizontal">
+      <FieldContent>
         <FieldTitle>Export</FieldTitle>
-        <FieldDescription>
-          TakaTime logs, imported heartbeats and settings. Archives also hold a copy of the database.
-        </FieldDescription>
+        <FieldDescription>A backup of all your data.</FieldDescription>
       </FieldContent>
 
-      <div className="flex shrink-0 items-center gap-1.5">
-        {EXPORT_FORMATS.map((format) => (
-          <a
-            key={format.value}
-            href={`/api/export?format=${format.value}`}
-            download
-            title={format.title}
-            className={buttonVariants({ variant: "secondary", size: "sm" })}>
-            <Download />
-            {format.label}
-          </a>
-        ))}
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button variant="secondary" size="sm" />}>
+          <Download />
+          Export
+          <ChevronDown className="opacity-60" />
+        </DropdownMenuTrigger>
+
+        <DropdownMenuContent align="end" className="w-80">
+          {EXPORT_FORMATS.map((format) => (
+            <DropdownMenuItem
+              key={format.value}
+              render={<a href={`/api/export?format=${format.value}`} download />}
+              className="flex-col items-start gap-0.5">
+              {format.label}
+              <span className="text-muted-foreground text-xs font-normal">{format.title}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </Field>
   )
 }

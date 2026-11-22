@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { actions } from "astro:actions"
-import { CircleCheck, FileJson, Upload } from "lucide-react"
+import { CircleCheck, FileJson, Trash2, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -381,16 +381,23 @@ export default function WakatimeImport({ imported: initial }: { imported: number
       <FieldContent className="min-w-0">
         <FieldTitle>WakaTime</FieldTitle>
         <FieldDescription role="status">
-          {notice ??
-            (imported ? `${count(imported)} heartbeats imported` : "Bring in your past coding time.")}
+          {notice ?? (imported ? `${count(imported)} heartbeats imported.` : "Bring in past coding time.")}
         </FieldDescription>
       </FieldContent>
 
       <div className="flex shrink-0 items-center gap-1.5">
+        {/* an icon until it asks for the confirming click, so the row stays on one line */}
         {!!imported && (
-          <Button variant="ghost" size="sm" className="text-destructive" disabled={removing} onClick={remove}>
-            {removing && <Spinner />}
-            {confirming ? "Confirm" : "Remove"}
+          <Button
+            variant="ghost"
+            size={confirming ? "sm" : "icon-sm"}
+            className="text-destructive hover:text-destructive"
+            aria-label={confirming ? "Confirm removing imported heartbeats" : "Remove imported heartbeats"}
+            title={confirming ? undefined : "Remove imported heartbeats"}
+            disabled={removing}
+            onClick={remove}>
+            {removing ? <Spinner /> : !confirming && <Trash2 />}
+            {confirming && "Confirm"}
           </Button>
         )}
         <Button

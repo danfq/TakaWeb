@@ -4,6 +4,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* viewport heights, the settings sheet tightens on them instead of scrolling, measured against its content */
+@custom-variant short (@media (max-height: 860px));
+@custom-variant shorter (@media (max-height: 800px));
+@custom-variant shortest (@media (max-height: 760px));
+
 /* self hosted fonts, preloaded in the main layout */
 @font-face {
   font-family: "Figtree";

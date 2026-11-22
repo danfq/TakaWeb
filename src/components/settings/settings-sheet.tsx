@@ -82,9 +82,9 @@ const SETTINGS_OPTIONS: {
   },
   {
     id: "hideNames",
-    section: "Privacy",
+    section: "Dashboard",
     title: "Hide names",
-    description: "Blur projects, branches and files for screen sharing.",
+    description: "Blur names for screen sharing.",
   },
 ]
 
@@ -149,10 +149,12 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     // legends sit outside the fieldset's flex layout, so their spacing comes from a margin
     <FieldSet className="gap-0">
-      <FieldLegend variant="label" className="text-muted-foreground mb-4 text-xs tracking-wide uppercase">
+      <FieldLegend
+        variant="label"
+        className="text-muted-foreground short:mb-3 shortest:mb-2 mb-4 text-xs tracking-wide uppercase">
         {title}
       </FieldLegend>
-      <FieldGroup className="gap-5">{children}</FieldGroup>
+      <FieldGroup className="short:gap-4 shorter:gap-3 shortest:gap-2 gap-5">{children}</FieldGroup>
     </FieldSet>
   )
 }
@@ -185,7 +187,7 @@ function AccountSection({
       <Field orientation="horizontal">
         <FieldContent>
           <FieldTitle>Password</FieldTitle>
-          <FieldDescription>Changing it signs out every other session.</FieldDescription>
+          <FieldDescription>Signs out every other session.</FieldDescription>
         </FieldContent>
 
         <Button variant="secondary" size="sm" onClick={() => setChanging(true)}>
@@ -286,7 +288,7 @@ export default function SettingsSheet({ account }: { account: Account }) {
       </SheetTrigger>
 
       <SheetContent resizable storageKey="takaweb-settings-width">
-        <SheetHeader className="pr-36">
+        <SheetHeader className="shortest:pt-4 shortest:pb-2 pr-36">
           <SheetTitle>Settings</SheetTitle>
           <SheetDescription>Synced across your devices.</SheetDescription>
         </SheetHeader>
@@ -303,8 +305,8 @@ export default function SettingsSheet({ account }: { account: Account }) {
           Reset
         </Button>
 
-        {/* sized to fit, only scrolls as a last resort on very short screens */}
-        <div className="flex min-h-0 flex-1 scrollbar-thin flex-col gap-9 overflow-y-auto px-6 pt-2 pb-6">
+        {/* never scrolls, spacing tightens and descriptions give way on shorter screens instead */}
+        <div className="short:gap-7 shorter:gap-5 shortest:gap-4 shortest:pb-4 shortest:[&_[data-slot=field-description]]:hidden shortest:[&_[data-slot=field]]:items-center flex min-h-0 flex-1 flex-col gap-9 overflow-hidden px-6 pt-2 pb-6">
           {error && (
             <p role="alert" className="text-destructive -mb-5">
               {error}
