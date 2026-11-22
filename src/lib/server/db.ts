@@ -44,6 +44,32 @@ const migrations = [
   `
   CREATE INDEX imported_log_start ON imported_log (source, start);
   `,
+  // imports keep heartbeats and join them on read, so overlapping exports add up the same in any order
+  // each stored log becomes the heartbeat it started at, plus one where it ended so its time is kept
+  `
+  CREATE TABLE imported_heartbeat (
+    source TEXT NOT NULL,
+    time INTEGER NOT NULL,
+    file TEXT NOT NULL,
+    project TEXT NOT NULL,
+    language TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    editor TEXT NOT NULL,
+    os TEXT NOT NULL,
+    PRIMARY KEY (source, time, file)
+  ) WITHOUT ROWID;
+
+  INSERT OR IGNORE INTO imported_heartbeat (source, time, file, project, language, branch, editor, os)
+  SELECT source, start, file, project, language, branch, editor, os FROM imported_log;
+
+  INSERT OR IGNORE INTO imported_heartbeat (source, time, file, project, language, branch, editor, os)
+  SELECT source, end, file, project, language, branch, editor, os FROM imported_log AS log
+  WHERE NOT EXISTS (
+    SELECT 1 FROM imported_heartbeat AS beat WHERE beat.source = log.source AND beat.time = log.end
+  );
+
+  DROP TABLE imported_log;
+  `,
 ]
 
 /**

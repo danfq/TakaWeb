@@ -110,9 +110,9 @@ function ImportDialog({
 
     setPhase({ state: "working", message: "Reading export" })
 
-    let logs
+    let heartbeats
     try {
-      logs = parseExport(JSON.parse(await file.text()), agents)
+      heartbeats = parseExport(JSON.parse(await file.text()), agents)
     } catch (error) {
       return setPhase({
         state: "form",
@@ -120,8 +120,8 @@ function ImportDialog({
       })
     }
 
-    if (!logs.length) {
-      return setPhase({ state: "done", message: "Nothing to import, the export has no coding time." })
+    if (!heartbeats.length) {
+      return setPhase({ state: "done", message: "Nothing to import, the export has no heartbeats." })
     }
 
     let added = 0
@@ -137,15 +137,18 @@ function ImportDialog({
       onImported()
       setPhase({
         state: "form",
-        error: `${reason}. ${count(added)} logs were saved before it stopped, importing again picks up the rest.`,
+        error: `${reason}. ${count(added)} heartbeats were saved before it stopped, importing again picks up the rest.`,
       })
     }
 
-    for (const batch of importBatches(logs)) {
-      setPhase({ state: "working", message: `Importing ${count(sent)} of ${count(logs.length)} logs` })
+    for (const batch of importBatches(heartbeats)) {
+      setPhase({
+        state: "working",
+        message: `Importing ${count(sent)} of ${count(heartbeats.length)} heartbeats`,
+      })
 
       try {
-        const { data, error } = await actions.wakatime.import({ logs: batch })
+        const { data, error } = await actions.wakatime.import({ heartbeats: batch })
         if (error) return stopped(error.message)
 
         added += data.added
@@ -156,13 +159,13 @@ function ImportDialog({
       }
     }
 
-    const unnamed = logs.filter((log) => log.editor === UNKNOWN).length
+    const unnamed = heartbeats.filter((beat) => beat.editor === UNKNOWN).length
 
     onImported()
     setPhase({
       state: "done",
       message: [
-        `Added ${count(added)} logs to your dashboard.`,
+        `Added ${count(added)} heartbeats to your dashboard.`,
         skipped && `${count(skipped)} were already imported.`,
         unnamed && `${count(unnamed)} have no editor name.`,
       ]
@@ -324,7 +327,7 @@ export default function WakatimeImport() {
   const [removing, setRemoving] = useState(false)
 
   /**
-   * refresh how many logs came from wakatime
+   * refresh how many heartbeats came from wakatime
    */
   const refresh = async () => {
     try {
@@ -348,7 +351,7 @@ export default function WakatimeImport() {
   }, [confirming])
 
   /**
-   * delete imported logs, asking for a second click first
+   * delete imported heartbeats, asking for a second click first
    */
   const remove = async () => {
     if (!confirming) return setConfirming(true)
@@ -358,9 +361,9 @@ export default function WakatimeImport() {
 
     try {
       const { data, error } = await actions.wakatime.remove()
-      setNotice(error ? error.message : `Removed ${count(data.removed)} logs`)
+      setNotice(error ? error.message : `Removed ${count(data.removed)} heartbeats`)
     } catch {
-      setNotice("Could not reach TakaWeb, the logs may not have been removed")
+      setNotice("Could not reach TakaWeb, the heartbeats may not have been removed")
     } finally {
       setRemoving(false)
       // the outcome may be unknown, so read back what is actually left
@@ -373,7 +376,8 @@ export default function WakatimeImport() {
       <FieldContent className="min-w-0">
         <FieldTitle>WakaTime</FieldTitle>
         <FieldDescription role="status">
-          {notice ?? (imported ? `${count(imported)} logs imported` : "Bring in your past coding time.")}
+          {notice ??
+            (imported ? `${count(imported)} heartbeats imported` : "Bring in your past coding time.")}
         </FieldDescription>
       </FieldContent>
 

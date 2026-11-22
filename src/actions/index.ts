@@ -9,10 +9,10 @@ import {
   invalidateSession,
   setSessionCookie,
 } from "@/lib/server/auth/session"
-import { importLogs, importedCount, removeImported } from "@/lib/server/imports"
+import { importHeartbeats, importedCount, removeImported } from "@/lib/server/imports"
 import { importsChanged } from "@/lib/server/stats/store"
 import { LookupError, lookupAgents } from "@/lib/server/wakatime"
-import { IMPORT_BATCH, IMPORT_TIMEOUT } from "@/lib/wakatime"
+import { IMPORT_BATCH, IMPORT_LIMITS } from "@/lib/wakatime"
 
 /**
  * password policy, capped to keep hashing cheap
@@ -20,23 +20,17 @@ import { IMPORT_BATCH, IMPORT_TIMEOUT } from "@/lib/wakatime"
 const password = z.string().min(12, "Use at least 12 characters").max(128, "Use at most 128 characters")
 
 /**
- * a wakatime log as sent by the import, see ImportLog
+ * a wakatime heartbeat as sent by the import, see ImportHeartbeat
+ * times outside the range are skipped rather than rejected, so clock skew never stalls a whole batch
  */
-const importLog = z.object({
-  id: z.string().min(1).max(256),
-  file: z.string().min(1).max(4096),
-  project: z.string().max(512),
-  language: z.string().max(256),
-  branch: z.string().max(512),
-  editor: z.string().max(256),
-  os: z.string().max(64),
-  // real dates only, the dashboard formats every instant it holds
-  end: z
-    .number()
-    .int()
-    .min(Date.UTC(2000, 0, 1))
-    .refine((end) => end <= Date.now() + 86_400_000, "Log ends in the future"),
-  duration: z.number().positive().max(IMPORT_TIMEOUT),
+const importHeartbeat = z.object({
+  time: z.number().int(),
+  file: z.string().min(1).max(IMPORT_LIMITS.file),
+  project: z.string().max(IMPORT_LIMITS.project),
+  language: z.string().max(IMPORT_LIMITS.language),
+  branch: z.string().max(IMPORT_LIMITS.branch),
+  editor: z.string().max(IMPORT_LIMITS.editor),
+  os: z.string().max(IMPORT_LIMITS.os),
 })
 
 /**
@@ -162,7 +156,7 @@ export const server = {
 
   wakatime: {
     /**
-     * how many logs came from wakatime
+     * how many heartbeats came from wakatime
      */
     status: defineAction({
       handler: (_, context) => {
@@ -194,14 +188,14 @@ export const server = {
     }),
 
     /**
-     * store a batch of logs converted from a wakatime export
+     * store a batch of heartbeats read from a wakatime export
      */
     import: defineAction({
-      input: z.object({ logs: z.array(importLog).max(IMPORT_BATCH) }),
+      input: z.object({ heartbeats: z.array(importHeartbeat).max(IMPORT_BATCH) }),
       handler: (input, context) => {
         assertUser(context)
 
-        const result = importLogs(input.logs)
+        const result = importHeartbeats(input.heartbeats)
         if (result.added) importsChanged()
 
         return result
@@ -209,7 +203,7 @@ export const server = {
     }),
 
     /**
-     * delete every log a wakatime import added
+     * delete every heartbeat a wakatime import added
      */
     remove: defineAction({
       handler: (_, context) => {

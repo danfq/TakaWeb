@@ -1,18 +1,15 @@
 /**
- * a wakatime heartbeat turned into a takatime log, times in epoch ms
+ * a wakatime heartbeat as the import sends it, time in epoch ms
+ * the server joins every heartbeat it holds into logs, so exports overlapping in any order add up the same
  */
-export type ImportLog = {
-  // wakatime heartbeat id, imports skip ids already stored
-  id: string
+export type ImportHeartbeat = {
+  time: number
   file: string
   project: string
   language: string
   branch: string
   editor: string
   os: string
-  end: number
-  // seconds
-  duration: number
 }
 
 /**
@@ -26,9 +23,46 @@ export type Agents = Record<string, { editor: string; os: string; value: string 
 export const IMPORT_TIMEOUT = 15 * 60
 
 /**
- * most logs the import sends at once
+ * most heartbeats the import sends at once
  */
 export const IMPORT_BATCH = 2000
+
+/**
+ * longest text the server takes per heartbeat field, the parser clips to these so a batch is never rejected
+ */
+export const IMPORT_LIMITS = {
+  file: 4096,
+  project: 512,
+  language: 256,
+  branch: 512,
+  editor: 256,
+  os: 64,
+} as const
+
+/**
+ * earliest heartbeat the import takes, epoch ms
+ */
+export const IMPORT_SINCE = Date.UTC(2000, 0, 1)
+
+/**
+ * whether a heartbeat time is a real date the dashboard can show, a day of clock skew is fine
+ *
+ * @param time epoch ms
+ *
+ * @returns {boolean} in range
+ */
+export const inRange = (time: number): boolean =>
+  Number.isSafeInteger(time) && time >= IMPORT_SINCE && time <= Date.now() + 86_400_000
+
+/**
+ * cut text down to a length
+ *
+ * @param value text
+ * @param max longest length
+ *
+ * @returns {string} text, at most max long
+ */
+const clip = (value: string, max: number): string => (value.length > max ? value.slice(0, max) : value)
 
 /**
  * most bytes one import request carries, well under astro's 1 MB action body limit
@@ -38,20 +72,20 @@ const IMPORT_BATCH_BYTES = 512 * 1024
 const encoder = new TextEncoder()
 
 /**
- * split logs into requests bounded by both count and size, long file paths fill a request sooner
+ * split heartbeats into requests bounded by both count and size, long file paths fill a request sooner
  *
- * @param logs logs
+ * @param heartbeats heartbeats
  *
- * @returns {ImportLog[][]} batches, in order
+ * @returns {ImportHeartbeat[][]} batches, in order
  */
-export function importBatches(logs: ImportLog[]): ImportLog[][] {
-  const batches: ImportLog[][] = []
-  let batch: ImportLog[] = []
+export function importBatches(heartbeats: ImportHeartbeat[]): ImportHeartbeat[][] {
+  const batches: ImportHeartbeat[][] = []
+  let batch: ImportHeartbeat[] = []
   let bytes = 0
 
-  for (const log of logs) {
+  for (const beat of heartbeats) {
     // plus a comma between entries
-    const size = encoder.encode(JSON.stringify(log)).length + 1
+    const size = encoder.encode(JSON.stringify(beat)).length + 1
 
     if (batch.length && (batch.length === IMPORT_BATCH || bytes + size > IMPORT_BATCH_BYTES)) {
       batches.push(batch)
@@ -59,7 +93,7 @@ export function importBatches(logs: ImportLog[]): ImportLog[][] {
       bytes = 0
     }
 
-    batch.push(log)
+    batch.push(beat)
     bytes += size
   }
 
@@ -86,16 +120,6 @@ const SYSTEMS: Record<string, string> = {
 }
 
 type Agent = { editor: string; os: string }
-
-type Heartbeat = {
-  id: string
-  time: number
-  file: string
-  project: string
-  language: string
-  branch: string
-  agent: Agent
-}
 
 /**
  * read a string field
@@ -171,15 +195,15 @@ function readAgents(raw: Record<string, unknown>, looked: Agents): Map<string, A
 }
 
 /**
- * turn a wakatime heartbeats export into takatime logs
- * heartbeats are joined like wakatime does: each one lasts until the next, unless the gap is a break
+ * read the editor heartbeats out of a wakatime heartbeats export
+ * the server joins them into logs, so isolated heartbeats are kept too: another export can fill the gap around them
  *
  * @param raw parsed export json
  * @param looked user agents looked up through the api, names editors and systems
  *
- * @returns {ImportLog[]} logs, oldest first
+ * @returns {ImportHeartbeat[]} heartbeats, oldest first, one per file and millisecond
  */
-export function parseExport(raw: unknown, looked: Agents = {}): ImportLog[] {
+export function parseExport(raw: unknown, looked: Agents = {}): ImportHeartbeat[] {
   const data = raw as Record<string, unknown>
 
   if (!data || !Array.isArray(data.days)) {
@@ -188,7 +212,8 @@ export function parseExport(raw: unknown, looked: Agents = {}): ImportLog[] {
 
   const agents = readAgents(data, looked)
   const unknown: Agent = { editor: UNKNOWN, os: UNKNOWN }
-  const heartbeats: Heartbeat[] = []
+  // keyed like the server stores them, a repeated heartbeat is sent once
+  const heartbeats = new Map<string, ImportHeartbeat>()
 
   for (const day of data.days as Record<string, unknown>[]) {
     if (!Array.isArray(day?.heartbeats)) continue
@@ -204,44 +229,26 @@ export function parseExport(raw: unknown, looked: Agents = {}): ImportLog[] {
         ? parseAgent(text(beat.user_agent))
         : (agents.get(text(beat.user_agent_id)) ?? unknown)
 
-      heartbeats.push({
-        id: text(beat.id) || `${time}:${file}`,
-        time,
-        file,
-        project: text(beat.project) || UNKNOWN,
-        language: text(beat.language) || UNKNOWN,
-        branch: text(beat.branch),
-        agent,
-      })
+      const heartbeat: ImportHeartbeat = {
+        time: Math.round(time * 1000),
+        file: clip(file, IMPORT_LIMITS.file),
+        project: clip(text(beat.project) || UNKNOWN, IMPORT_LIMITS.project),
+        language: clip(text(beat.language) || UNKNOWN, IMPORT_LIMITS.language),
+        branch: clip(text(beat.branch), IMPORT_LIMITS.branch),
+        editor: clip(agent.editor, IMPORT_LIMITS.editor),
+        os: clip(agent.os, IMPORT_LIMITS.os),
+      }
+
+      // the server rejects a whole batch over one bad date, so they never leave the browser
+      if (!inRange(heartbeat.time)) continue
+
+      heartbeats.set(`${heartbeat.time}:${heartbeat.file}`, heartbeat)
     }
   }
 
-  if (!heartbeats.length && (data.days as unknown[]).length) {
+  if (!heartbeats.size && (data.days as unknown[]).length) {
     throw new Error("No editor heartbeats found, export heartbeats rather than daily totals")
   }
 
-  heartbeats.sort((a, b) => a.time - b.time)
-
-  const logs: ImportLog[] = []
-
-  for (let index = 0; index < heartbeats.length - 1; index++) {
-    const beat = heartbeats[index]
-    const gap = heartbeats[index + 1].time - beat.time
-
-    if (gap <= 0 || gap > IMPORT_TIMEOUT) continue
-
-    logs.push({
-      id: beat.id,
-      file: beat.file,
-      project: beat.project,
-      language: beat.language,
-      branch: beat.branch,
-      editor: beat.agent.editor,
-      os: beat.agent.os,
-      end: Math.round((beat.time + gap) * 1000),
-      duration: gap,
-    })
-  }
-
-  return logs
+  return [...heartbeats.values()].sort((a, b) => a.time - b.time || (a.file < b.file ? -1 : 1))
 }
