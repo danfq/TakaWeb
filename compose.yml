@@ -1,6 +1,8 @@
 services:
   takaweb:
     image: "ghcr.io/danfq/takaweb:latest"
+    # builds from source when the image cannot be pulled, or with docker compose up --build
+    build: "."
     restart: "unless-stopped"
     depends_on:
       mongo:
@@ -11,6 +13,7 @@ services:
       # direct, so the replica set member address meant for editors does not matter here
       MONGO_URI: "mongodb://${MONGO_READONLY_USERNAME:-takaweb}:${MONGO_READONLY_PASSWORD:?set MONGO_READONLY_PASSWORD}@mongo:${MONGO_PORT:-27017}/takatime?authSource=admin&directConnection=true"
       TAKAWEB_URL: "${TAKAWEB_URL:-http://localhost:4321}"
+      TAKAWEB_TRUSTED_PROXIES: "${TAKAWEB_TRUSTED_PROXIES:-0}"
       TAKAWEB_DATA_DIR: "/data"
     ports:
       - "${TAKAWEB_BIND:-127.0.0.1}:${TAKAWEB_PORT:-4321}:4321"
