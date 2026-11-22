@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react"
-import { ChevronLeft, TrendingDown, TrendingUp } from "lucide-react"
+import { ChevronLeft, CircleAlert, TrendingDown, TrendingUp } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { DayParts } from "@/components/dashboard/activity"
 import BarChart from "@/components/dashboard/bar-chart"
 import { useDuration, useLocale } from "@/components/dashboard/locale"
@@ -427,12 +428,27 @@ export default function PeriodSheet({
                   </Button>
                 </div>
               ) : detail ? (
-                <Insights
-                  detail={detail}
-                  view={detail.view}
-                  now={now}
-                  onPeriod={(next) => onPeriods([...periods, next])}
-                />
+                <>
+                  {/* a failed refresh keeps the last numbers, but says they may be outdated */}
+                  {failed && (
+                    <Alert variant="destructive" className="mx-6 mb-5 w-auto">
+                      <CircleAlert />
+                      <AlertTitle>Could not refresh this period</AlertTitle>
+                      <AlertDescription className="flex flex-col items-start gap-2">
+                        These numbers may be outdated.
+                        <Button variant="secondary" size="sm" onClick={retry}>
+                          Try again
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  <Insights
+                    detail={detail}
+                    view={detail.view}
+                    now={now}
+                    onPeriod={(next) => onPeriods([...periods, next])}
+                  />
+                </>
               ) : (
                 <Loading />
               )}
