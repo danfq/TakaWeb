@@ -21,6 +21,36 @@ export default defineConfig({
     mode: "standalone",
   }),
 
+  // no markdown here, and shiki's inline styles would need the policy below loosened
+  markdown: {
+    syntaxHighlight: false,
+  },
+
+  security: {
+    // a policy with hashes of every script and style astro renders, only applied to builds
+    // the middleware adds frame-ancestors and the other security headers
+    csp: {
+      directives: [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "object-src 'none'",
+        "form-action 'self'",
+        "img-src 'self' data:",
+        "font-src 'self'",
+        "connect-src 'self'",
+        "worker-src 'self'",
+        "frame-src 'none'",
+      ],
+      styleDirective: {
+        resources: [
+          { resource: "'self'", kind: "element" },
+          // react renders style attributes, such as chart bar heights, on the server
+          { resource: "'unsafe-inline'", kind: "attribute" },
+        ],
+      },
+    },
+  },
+
   env: {
     schema: {
       // read at runtime so compose can override them
