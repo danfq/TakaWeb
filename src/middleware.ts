@@ -55,10 +55,11 @@ async function route(context: APIContext, next: MiddlewareNext): Promise<Respons
     }
   }
 
-  // actions guard themselves
-  if (context.url.pathname.startsWith("/_actions/")) return next()
-
   const { pathname } = context.url
+
+  // actions guard themselves, healthchecks have no session
+  if (pathname.startsWith("/_actions/") || pathname === "/api/health") return next()
+
   const { user } = context.locals
 
   // api clients cannot follow a login redirect
