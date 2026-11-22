@@ -435,6 +435,7 @@ export default function PeriodSheet({
   onPeriods,
   view,
   revision,
+  imports,
   today,
   now,
 }: {
@@ -444,6 +445,8 @@ export default function PeriodSheet({
   view: View;
   // the dashboard's live snapshot, refreshes periods that include today
   revision: unknown;
+  // imported logs version, refreshes past periods when imports change
+  imports: number | undefined;
   // today's key in the dashboard's timezone
   today: string;
   now: number;
@@ -451,11 +454,12 @@ export default function PeriodSheet({
   const { locale } = useLocale();
   const period = periods.at(-1) ?? null;
 
-  // refresh with each live snapshot while the requested period includes today
+  // refresh with each live snapshot while the requested period includes today,
+  // past periods only change when imported logs do
   const { detail, current, failed, retry } = useDetail(
     view,
     period,
-    !!period && period.to >= today ? revision : null,
+    !!period && period.to >= today ? revision : imports,
   );
 
   // label everything after what is on screen: the loaded detail, or the request

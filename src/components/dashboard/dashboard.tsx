@@ -424,6 +424,7 @@ export default function Dashboard(initial: DashboardProps) {
           onPeriods={setPeriods}
           view={{ tz, filter }}
           revision={snapshot}
+          imports={snapshot?.imports}
           today={dayKey(now, tz)}
           now={now}
         />

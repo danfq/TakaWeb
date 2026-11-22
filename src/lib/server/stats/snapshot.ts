@@ -610,7 +610,7 @@ export function snapshot(
   view: View,
   all: readonly Entry[],
   now: number,
-): Snapshot {
+): Omit<Snapshot, "imports"> {
   const { filter } = view;
   const list = filter
     ? all.filter((entry) => entry[filter.dimension] === filter.value)

@@ -5,6 +5,7 @@ import type {
   Status,
   View,
 } from "@/lib/stats/types";
+import { importedVersion } from "@/lib/server/imports";
 import { detail, snapshot } from "./snapshot";
 import {
   entries,
@@ -55,6 +56,18 @@ const keyOf = ({ tz, filter }: View): string =>
 const RENDER_WAIT = 5000;
 
 /**
+ * the current snapshot for a view, stamped with the imported logs version
+ *
+ * @param view view
+ *
+ * @returns {Snapshot} snapshot
+ */
+const build = (view: View): Snapshot => ({
+  ...snapshot(view, entries(), Date.now()),
+  imports: importedVersion(),
+});
+
+/**
  * recompute a channel and push it when it changed
  *
  * @param channel channel
@@ -63,7 +76,7 @@ const RENDER_WAIT = 5000;
 function refresh(channel: Channel, force = false) {
   if (!isLoaded()) return;
 
-  const payload = JSON.stringify(snapshot(channel.view, entries(), Date.now()));
+  const payload = JSON.stringify(build(channel.view));
   if (!force && payload === channel.payload) return;
 
   channel.payload = payload;
@@ -154,7 +167,7 @@ export async function initial(
     return {
       snapshot: cached
         ? JSON.parse(cached)
-        : snapshot(view, entries(), Date.now()),
+        : build(view),
       status: status(),
     };
   } finally {

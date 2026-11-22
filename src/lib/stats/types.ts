@@ -113,6 +113,8 @@ export type Snapshot = {
   // latest sessions across all time, newest first, ranges cut them by start
   sessions: Session[];
   ranges: Record<Range, Period>;
+  // changes whenever imported logs do, so past periods know to refresh
+  imports: number;
 };
 
 /**
