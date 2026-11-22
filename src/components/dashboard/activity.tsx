@@ -12,7 +12,7 @@ import {
 import BarChart from "@/components/dashboard/bar-chart";
 import Calendar from "@/components/dashboard/calendar";
 import { SectionBody, TabbedSection } from "@/components/dashboard/section";
-import { change, day } from "@/lib/stats/format";
+import { change, day, hour } from "@/lib/stats/format";
 import { useDuration, useLocale } from "@/components/dashboard/locale";
 import { dayPeriod, monthPeriod, samePeriod } from "@/lib/stats/period";
 import type {
@@ -117,13 +117,19 @@ function Trend({ ratio, against }: { ratio: number | null; against: string }) {
  * @param unit bucket unit
  * @param bucket bucket
  * @param locale bcp 47 locale
+ * @param hour12 12 hour clock, the locale decides when undefined
  *
  * @returns {string} label
  */
-function describe(unit: Unit, bucket: Bucket, locale: string): string {
+function describe(
+  unit: Unit,
+  bucket: Bucket,
+  locale: string,
+  hour12?: boolean,
+): string {
   if (unit === "hour") {
-    const next = String((Number(bucket.key) + 1) % 24).padStart(2, "0");
-    return `Today, ${bucket.key}:00 to ${next}:00`;
+    const from = Number(bucket.key);
+    return `Today, ${hour(from, locale, hour12)} to ${hour(from + 1, locale, hour12)}`;
   }
 
   if (unit === "day") return day(bucket.key, locale);
@@ -137,14 +143,21 @@ function describe(unit: Unit, bucket: Bucket, locale: string): string {
  * @param unit bucket unit
  * @param buckets buckets
  * @param locale bcp 47 locale
+ * @param hour12 12 hour clock, the locale decides when undefined
  *
  * @returns tick formatter
  */
-function ticks(unit: Unit, buckets: Bucket[], locale: string) {
+function ticks(
+  unit: Unit,
+  buckets: Bucket[],
+  locale: string,
+  hour12?: boolean,
+) {
   const last = buckets.length - 1;
 
   return (bucket: Bucket, index: number): string => {
-    if (unit === "hour") return index % 3 === 0 ? bucket.key : "";
+    if (unit === "hour")
+      return index % 3 === 0 ? hour(bucket.key, locale, hour12, true) : "";
 
     if (unit === "day") {
       if (buckets.length <= 7)
@@ -180,7 +193,7 @@ function Timeline({
 }) {
   const duration = useDuration();
   const [hovered, setHovered] = useState<number | null>(null);
-  const { locale } = useLocale();
+  const { locale, hour12 } = useLocale();
   const { activity } = period;
   const bucket = hovered === null ? null : activity.buckets[hovered];
 
@@ -202,7 +215,7 @@ function Timeline({
       {bucket ? (
         <Readout
           value={duration(bucket.seconds)}
-          caption={describe(activity.unit, bucket, locale)}
+          caption={describe(activity.unit, bucket, locale, hour12)}
         />
       ) : (
         <Readout
@@ -223,13 +236,15 @@ function Timeline({
         <BarChart
           className="flex-1"
           buckets={activity.buckets}
-          tick={ticks(activity.unit, activity.buckets, locale)}
+          tick={ticks(activity.unit, activity.buckets, locale, hour12)}
           current={activity.current}
           hovered={hovered}
           onHover={setHovered}
           live={live}
           selected={open === -1 ? null : open}
-          describe={(bucket) => describe(activity.unit, bucket, locale)}
+          describe={(bucket) =>
+            describe(activity.unit, bucket, locale, hour12)
+          }
           onSelect={
             toPeriod
               ? (index) => onOpen(toPeriod(activity.buckets[index]))
@@ -355,6 +370,7 @@ export function DayParts({
  */
 function Hours({ period, range }: { period: Period; range: Range }) {
   const duration = useDuration();
+  const { locale, hour12 } = useLocale();
   const [hovered, setHovered] = useState<number | null>(null);
   const { hours } = period;
   const { top, total } = dayParts(hours);
@@ -369,7 +385,7 @@ function Hours({ period, range }: { period: Period; range: Range }) {
       {hovered !== null ? (
         <Readout
           value={duration(hours[hovered])}
-          caption={`between ${buckets[hovered].key}:00 and ${String((hovered + 1) % 24).padStart(2, "0")}:00, ${RANGE_LABELS[range].toLowerCase()}`}
+          caption={`between ${hour(hovered, locale, hour12)} and ${hour(hovered + 1, locale, hour12)}, ${RANGE_LABELS[range].toLowerCase()}`}
         />
       ) : (
         <Readout
@@ -386,7 +402,9 @@ function Hours({ period, range }: { period: Period; range: Range }) {
         <BarChart
           className="flex-1"
           buckets={buckets}
-          tick={(bucket, index) => (index % 3 === 0 ? bucket.key : "")}
+          tick={(bucket, index) =>
+            index % 3 === 0 ? hour(bucket.key, locale, hour12, true) : ""
+          }
           current={hovered ?? undefined}
           hovered={hovered}
           onHover={setHovered}

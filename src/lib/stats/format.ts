@@ -166,6 +166,29 @@ export const time = (
   });
 
 /**
+ * format an hour of the day, already in the dashboard's timezone
+ *
+ * @param key hour, 0 to 23, wraps past midnight
+ * @param locale bcp 47 locale
+ * @param hour12 12 hour clock, the locale decides when undefined
+ * @param short hour alone, for axis ticks
+ *
+ * @returns {string} e.g. 14:00, or 14 when short
+ */
+export const hour = (
+  key: string | number,
+  locale: string,
+  hour12?: boolean,
+  short = false,
+): string =>
+  new Date(Date.UTC(2000, 0, 1, Number(key) % 24)).toLocaleTimeString(locale, {
+    hour: short ? "numeric" : "2-digit",
+    minute: short ? undefined : "2-digit",
+    timeZone: "UTC",
+    hour12,
+  });
+
+/**
  * calendar day an instant falls on
  *
  * @param ms epoch ms

@@ -15,7 +15,14 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
-import { change, day, label, sensitive, time } from "@/lib/stats/format";
+import {
+  change,
+  day,
+  hour,
+  label,
+  sensitive,
+  time,
+} from "@/lib/stats/format";
 import { dayPeriod, isMonth } from "@/lib/stats/period";
 import type {
   Bucket,
@@ -246,7 +253,7 @@ function Insights({
    */
   const describe = (bucket: Bucket) =>
     single
-      ? `${bucket.key}:00 to ${String((Number(bucket.key) + 1) % 24).padStart(2, "0")}:00`
+      ? `${hour(bucket.key, locale, hour12)} to ${hour(Number(bucket.key) + 1, locale, hour12)}`
       : day(bucket.key, locale);
 
   const bucket = hovered === null ? null : detail.buckets[hovered];
@@ -313,7 +320,8 @@ function Insights({
           title={single ? "Busiest hour" : "Best day"}
           value={peak ? duration(peak.seconds) : "-"}
         >
-          {peak && (single ? `${peak.key}:00` : day(peak.key, locale))}
+          {peak &&
+            (single ? hour(peak.key, locale, hour12) : day(peak.key, locale))}
         </Stat>
       </div>
 
@@ -332,7 +340,7 @@ function Insights({
           tick={(bucket, index) =>
             single
               ? index % 6 === 0
-                ? bucket.key
+                ? hour(bucket.key, locale, hour12, true)
                 : ""
               : index === 0 || index % 7 === 0
                 ? day(bucket.key, locale, { day: "numeric", month: "short" })
