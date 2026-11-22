@@ -23,6 +23,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
+import DataExport from "@/components/settings/data-export"
 import PasswordDialog from "@/components/settings/password-dialog"
 import SessionList from "@/components/settings/session-list"
 import { useSettings, useSettingsError, useSettingsStore } from "@/components/settings/settings-store"
@@ -309,6 +310,7 @@ export default function SettingsSheet({ account }: { account: Account }) {
 
           <Section title="Data">
             <WakatimeImport imported={account.imported} />
+            <DataExport />
           </Section>
         </div>
       </SheetContent>
