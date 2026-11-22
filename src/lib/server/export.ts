@@ -114,7 +114,10 @@ async function writeJson(path: string, userId: number, now: Date) {
   })
 
   try {
-    await write(out, `{\n"takaweb": ${JSON.stringify({ version: EXPORT_VERSION, exportedAt: now.toISOString() })},\n`)
+    await write(
+      out,
+      `{\n"takaweb": ${JSON.stringify({ version: EXPORT_VERSION, exportedAt: now.toISOString() })},\n`
+    )
     await write(out, `"settings": ${JSON.stringify(getSettings(userId))},\n`)
     await write(out, `"logs": `)
     await writeLogs(out)
@@ -217,8 +220,7 @@ export async function createExport(format: ExportFormat, userId: number): Promis
       { name: "takaweb.db", path: database, modified: now },
     ]
 
-    const stream =
-      format === "zip" ? Readable.from(zip(files)) : Readable.from(tar(files)).pipe(createGzip())
+    const stream = format === "zip" ? Readable.from(zip(files)) : Readable.from(tar(files)).pipe(createGzip())
 
     return { body: cleaning(stream, cleanup), filename: `takaweb-export-${stamp}.${format}` }
   } catch (error) {

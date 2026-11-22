@@ -13,7 +13,10 @@ type FieldErrors = Record<string, { message: string }[] | undefined>
  *
  * @returns form state and submit handler
  */
-export function useActionForm<T>(action: FormAction<T>, done: string | ((data: T, form: HTMLFormElement) => void)) {
+export function useActionForm<T>(
+  action: FormAction<T>,
+  done: string | ((data: T, form: HTMLFormElement) => void)
+) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fields, setFields] = useState<FieldErrors>({})

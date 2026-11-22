@@ -27,15 +27,15 @@ const normalize = (address: string): string => address.trim().replace(/^::ffff:(
  *
  * @returns {string} client address
  */
-export function clientIp({ request, clientAddress }: RequestContext, proxies = TAKAWEB_TRUSTED_PROXIES): string {
+export function clientIp(
+  { request, clientAddress }: RequestContext,
+  proxies = TAKAWEB_TRUSTED_PROXIES
+): string {
   const socket = normalize(clientAddress ?? "")
 
   if (proxies <= 0) return socket
 
-  const forwarded = (request.headers.get("x-forwarded-for") ?? "")
-    .split(",")
-    .map(normalize)
-    .filter(Boolean)
+  const forwarded = (request.headers.get("x-forwarded-for") ?? "").split(",").map(normalize).filter(Boolean)
 
   // the entry the outermost trusted proxy appended, it saw the client connect
   const candidate = forwarded[forwarded.length - proxies]

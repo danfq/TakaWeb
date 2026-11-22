@@ -28,7 +28,8 @@ const HSTS = "max-age=63072000"
  *
  * @returns {boolean} https
  */
-const isHttps = (url: URL): boolean => (TAKAWEB_URL ? new URL(TAKAWEB_URL).protocol : url.protocol) === "https:"
+const isHttps = (url: URL): boolean =>
+  (TAKAWEB_URL ? new URL(TAKAWEB_URL).protocol : url.protocol) === "https:"
 
 /**
  * add the security headers to a response

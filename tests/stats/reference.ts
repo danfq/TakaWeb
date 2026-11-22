@@ -1,15 +1,15 @@
 import { days, weekday } from "@/lib/server/stats/days"
-import {
-  activity,
-  detail,
-  distribute,
-  groups,
-  latest,
-  summarize,
-  window,
-} from "@/lib/server/stats/snapshot"
+import { activity, detail, distribute, groups, latest, summarize, window } from "@/lib/server/stats/snapshot"
 import type { Entry } from "@/lib/server/stats/store"
-import { RANGES, type Detail, type PeriodRange, type Period, type Range, type Snapshot, type View } from "@/lib/stats/types"
+import {
+  RANGES,
+  type Detail,
+  type PeriodRange,
+  type Period,
+  type Range,
+  type Snapshot,
+  type View,
+} from "@/lib/stats/types"
 
 /**
  * the dashboard snapshot computed directly from every log, the way takaweb did before caching
@@ -81,5 +81,9 @@ export function referenceSnapshot(view: View, all: readonly Entry[], now: number
  *
  * @returns {Detail} detail
  */
-export const referenceDetail = (view: View, all: readonly Entry[], now: number, period: PeriodRange): Detail =>
-  detail(view, all, now, period, Infinity)
+export const referenceDetail = (
+  view: View,
+  all: readonly Entry[],
+  now: number,
+  period: PeriodRange
+): Detail => detail(view, all, now, period, Infinity)

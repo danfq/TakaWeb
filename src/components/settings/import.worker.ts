@@ -143,7 +143,9 @@ self.onmessage = async ({ data }: MessageEvent<ImportRequest>) => {
     try {
       heartbeats = await read(data.file, data.agents)
     } catch (error) {
-      throw new ImportFailure(error instanceof SyntaxError ? "This file is not valid JSON" : (error as Error).message)
+      throw new ImportFailure(
+        error instanceof SyntaxError ? "This file is not valid JSON" : (error as Error).message
+      )
     }
 
     const total = heartbeats.length

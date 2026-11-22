@@ -77,7 +77,8 @@ export async function* zip(files: ArchiveFile[]): AsyncGenerator<Buffer> {
       yield chunk as Buffer
     }
 
-    if (size > ZIP_LIMIT || compressed > ZIP_LIMIT) throw new Error(`${file.name} is too large for a zip archive`)
+    if (size > ZIP_LIMIT || compressed > ZIP_LIMIT)
+      throw new Error(`${file.name} is too large for a zip archive`)
 
     const descriptor = Buffer.alloc(16)
     descriptor.writeUInt32LE(0x08074b50, 0)

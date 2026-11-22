@@ -4,7 +4,12 @@
  */
 export const EXPORT_FORMATS = [
   { value: "json", label: "JSON", title: "Your data as one JSON file", type: "application/json" },
-  { value: "zip", label: "ZIP", title: "Your data and a database copy, as a ZIP archive", type: "application/zip" },
+  {
+    value: "zip",
+    label: "ZIP",
+    title: "Your data and a database copy, as a ZIP archive",
+    type: "application/zip",
+  },
   {
     value: "tar.gz",
     label: "TAR.GZ",

@@ -57,7 +57,9 @@ type Bucket = {
  */
 const bucket = (): Bucket => ({
   spans: [],
-  values: Object.fromEntries(BREAKDOWNS.map((name) => [name, new Map<string, number[]>()])) as Bucket["values"],
+  values: Object.fromEntries(
+    BREAKDOWNS.map((name) => [name, new Map<string, number[]>()])
+  ) as Bucket["values"],
 })
 
 /**

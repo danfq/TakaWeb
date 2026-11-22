@@ -101,9 +101,7 @@ function cacheFor(view: View): ViewCache {
  * @param now current instant
  */
 function prune(now: number) {
-  const idle = [...hub.caches]
-    .filter(([key]) => !hub.channels.has(key))
-    .sort((a, b) => a[1].used - b[1].used)
+  const idle = [...hub.caches].filter(([key]) => !hub.channels.has(key)).sort((a, b) => a[1].used - b[1].used)
 
   let over = hub.caches.size - MAX_CACHES
 
