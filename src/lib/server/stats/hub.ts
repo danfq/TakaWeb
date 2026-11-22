@@ -1,7 +1,8 @@
 import type { Detail, PeriodRange, Snapshot, Status, View } from "@/lib/stats/types"
 import { importedVersion } from "@/lib/server/imports"
-import { detail, snapshot } from "./snapshot"
-import { entries, isLoaded, retain, status, subscribe, whenReady } from "./store"
+import { ViewCache, type Source } from "./engine"
+import { detail } from "./snapshot"
+import { changes, entries, isLoaded, maxDuration, retain, status, subscribe, whenReady } from "./store"
 
 /**
  * a connected client
@@ -22,10 +23,29 @@ type Channel = {
  */
 const TICK = 60_000
 
-const channels = new Map<string, Channel>()
-let lastStatus = JSON.stringify(status())
-let ticker: ReturnType<typeof setInterval> | null = null
-let unsubscribe: (() => void) | null = null
+/**
+ * how long a view's cache outlives its last subscriber, so reloads and quick filter switches stay instant
+ */
+const CACHE_TTL = 10 * 60_000
+
+/**
+ * most views kept cached at once
+ */
+const MAX_CACHES = 16
+
+const hub: {
+  channels: Map<string, Channel>
+  caches: Map<string, { cache: ViewCache; used: number }>
+  lastStatus: string
+  ticker: ReturnType<typeof setInterval> | null
+  unsubscribe: (() => void) | null
+} = {
+  channels: new Map(),
+  caches: new Map(),
+  lastStatus: JSON.stringify(status()),
+  ticker: null,
+  unsubscribe: null,
+}
 
 /**
  * stable key for a view
@@ -42,6 +62,57 @@ const keyOf = ({ tz, filter }: View): string => JSON.stringify([tz, filter?.dime
 const RENDER_WAIT = 5000
 
 /**
+ * the logs as caches read them
+ *
+ * @returns {Source} source
+ */
+function source(): Source {
+  const { structure, imports, appended } = changes()
+
+  return { all: entries(), structure, imports, appended, maxDuration: maxDuration() }
+}
+
+/**
+ * the cache for a view, created on first use
+ *
+ * @param view view
+ *
+ * @returns {ViewCache} cache
+ */
+function cacheFor(view: View): ViewCache {
+  const key = keyOf(view)
+  const now = Date.now()
+  let held = hub.caches.get(key)
+
+  if (!held) {
+    held = { cache: new ViewCache(view), used: now }
+    hub.caches.set(key, held)
+    prune(now)
+  }
+
+  held.used = now
+
+  return held.cache
+}
+
+/**
+ * drop caches nobody used for a while, keeping the ones open channels need
+ *
+ * @param now current instant
+ */
+function prune(now: number) {
+  const idle = [...hub.caches]
+    .filter(([key]) => !hub.channels.has(key))
+    .sort((a, b) => a[1].used - b[1].used)
+
+  let over = hub.caches.size - MAX_CACHES
+
+  for (const [key, { used }] of idle) {
+    if (over-- > 0 || now - used > CACHE_TTL) hub.caches.delete(key)
+  }
+}
+
+/**
  * the current snapshot for a view, stamped with the imported logs version
  *
  * @param view view
@@ -49,7 +120,7 @@ const RENDER_WAIT = 5000
  * @returns {Snapshot} snapshot
  */
 const build = (view: View): Snapshot => ({
-  ...snapshot(view, entries(), Date.now()),
+  ...cacheFor(view).snapshot(source(), Date.now()),
   imports: importedVersion(),
 })
 
@@ -75,15 +146,17 @@ function refresh(channel: Channel, force = false) {
 function broadcast() {
   const current = JSON.stringify(status())
 
-  if (current !== lastStatus) {
-    lastStatus = current
+  if (current !== hub.lastStatus) {
+    hub.lastStatus = current
 
-    for (const channel of channels.values()) {
+    for (const channel of hub.channels.values()) {
       for (const send of channel.subscribers) send("status", current)
     }
   }
 
-  for (const channel of channels.values()) refresh(channel)
+  for (const channel of hub.channels.values()) refresh(channel)
+
+  prune(Date.now())
 }
 
 /**
@@ -96,17 +169,17 @@ function broadcast() {
  */
 export function join(view: View, send: Subscriber): () => void {
   const key = keyOf(view)
-  let channel = channels.get(key)
+  let channel = hub.channels.get(key)
 
   if (!channel) {
     channel = { view, subscribers: new Set(), payload: null }
-    channels.set(key, channel)
+    hub.channels.set(key, channel)
   }
 
   channel.subscribers.add(send)
 
-  unsubscribe ??= subscribe(broadcast)
-  ticker ??= setInterval(broadcast, TICK)
+  hub.unsubscribe ??= subscribe(broadcast)
+  hub.ticker ??= setInterval(broadcast, TICK)
 
   const release = retain()
 
@@ -119,15 +192,20 @@ export function join(view: View, send: Subscriber): () => void {
     release()
     channel.subscribers.delete(send)
 
-    if (channel.subscribers.size === 0) channels.delete(key)
+    if (channel.subscribers.size === 0) hub.channels.delete(key)
 
-    if (channels.size === 0) {
-      if (ticker) clearInterval(ticker)
-      unsubscribe?.()
-      ticker = null
-      unsubscribe = null
-    }
+    if (hub.channels.size === 0) stopHub()
   }
+}
+
+/**
+ * stop ticking and listening, once nobody is subscribed or the server shuts down
+ */
+export function stopHub() {
+  if (hub.ticker) clearInterval(hub.ticker)
+  hub.unsubscribe?.()
+  hub.ticker = null
+  hub.unsubscribe = null
 }
 
 /**
@@ -146,7 +224,7 @@ export async function initial(view: View): Promise<{ snapshot: Snapshot | null; 
 
     if (!isLoaded()) return { snapshot: null, status: status() }
 
-    const cached = channels.get(keyOf(view))?.payload
+    const cached = hub.channels.get(keyOf(view))?.payload
 
     return {
       snapshot: cached ? JSON.parse(cached) : build(view),
@@ -171,7 +249,7 @@ export async function periodDetail(view: View, period: PeriodRange): Promise<Det
   try {
     await whenReady(RENDER_WAIT)
 
-    return isLoaded() ? detail(view, entries(), Date.now(), period) : null
+    return isLoaded() ? detail(view, entries(), Date.now(), period, maxDuration()) : null
   } finally {
     release()
   }

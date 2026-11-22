@@ -16,8 +16,8 @@ import {
 import { dayIndex, days, keyIndex, monthStart, nextShift, offsetIn, weekday, type Days } from "./days"
 import type { Entry } from "./store"
 
-const HOUR = 60 * 60 * 1000
-const DAY = 24 * HOUR
+export const HOUR = 60 * 60 * 1000
+export const DAY = 24 * HOUR
 
 /**
  * the calendar day after a day key
@@ -31,16 +31,16 @@ const nextDay = (key: string): string => new Date(Date.parse(key) + DAY).toISOSt
 /**
  * a gap longer than this splits a session, matches takatime's idle cutoff in spirit
  */
-const SESSION_GAP = 15 * 60 * 1000
+export const SESSION_GAP = 15 * 60 * 1000
 
-const LIST_LIMIT = 100
-const FILE_LIMIT = 50
-const SESSION_LIMIT = 100
+export const LIST_LIMIT = 100
+export const FILE_LIMIT = 50
+export const SESSION_LIMIT = 100
 
 /**
  * a range as inclusive day indexes, plus the period before it
  */
-type Window = {
+export type Window = {
   range: Range
   from: number
   to: number
@@ -50,13 +50,51 @@ type Window = {
 type Spans = Record<Dimension | "file", Map<string, number[]>>
 
 /**
+ * what logs are broken down by, files included
+ */
+export const BREAKDOWNS = ["project", "language", "editor", "os", "branch", "file"] as const
+
+/**
+ * first index whose log starts at or after an instant
+ *
+ * @param list entries ordered by start
+ * @param ms epoch ms
+ *
+ * @returns {number} index, list.length when none does
+ */
+export function lowerBound(list: readonly Entry[], ms: number): number {
+  let low = 0
+  let high = list.length
+
+  while (low < high) {
+    const middle = (low + high) >> 1
+
+    if (list[middle].start < ms) low = middle + 1
+    else high = middle
+  }
+
+  return low
+}
+
+/**
+ * keep only the logs a view's filter matches
+ *
+ * @param list entries
+ * @param filter view filter
+ *
+ * @returns {readonly Entry[]} matching entries
+ */
+export const filtered = (list: readonly Entry[], filter: View["filter"]): readonly Entry[] =>
+  filter ? list.filter((entry) => entry[filter.dimension] === filter.value) : list
+
+/**
  * merge overlapping intervals and sum them, mirrors takatime's true duration
  *
  * @param spans flat start and end pairs, ordered by start
  *
  * @returns {number} seconds
  */
-function trueDuration(spans: number[]): number {
+export function trueDuration(spans: number[]): number {
   let total = 0
   let start = spans[0]
   let end = spans[1]
@@ -83,7 +121,7 @@ function trueDuration(spans: number[]): number {
  *
  * @returns {Window} window
  */
-function window(table: Days, range: Range, firstActive: number): Window {
+export function window(table: Days, range: Range, firstActive: number): Window {
   const { today } = table
   const key = table.keys[today]
 
@@ -137,7 +175,7 @@ function window(table: Days, range: Range, firstActive: number): Window {
  *
  * @returns {number} seconds
  */
-function sum(daily: Float64Array, from: number, to: number): number {
+export function sum(daily: Float64Array, from: number, to: number): number {
   let total = 0
   for (let index = Math.max(from, 0); index <= to; index++) total += daily[index]
 
@@ -169,7 +207,7 @@ function hourOf(table: Days, ms: number): number {
  *
  * @returns daily seconds, hour of day seconds per range, hourly seconds of the focus day
  */
-function distribute(list: readonly Entry[], table: Days, bounds: [number, number][], focus: number) {
+export function distribute(list: readonly Entry[], table: Days, bounds: [number, number][], focus: number) {
   const daily = new Float64Array(table.keys.length)
   const hours = bounds.map(() => new Array<number>(24).fill(0))
   const focused = new Array<number>(24).fill(0)
@@ -232,7 +270,7 @@ function distribute(list: readonly Entry[], table: Days, bounds: [number, number
  *
  * @returns {Summary} summary
  */
-function summarize(daily: Float64Array, table: Days): Summary {
+export function summarize(daily: Float64Array, table: Days): Summary {
   const { today, keys } = table
 
   let allTime = 0
@@ -291,7 +329,7 @@ function summarize(daily: Float64Array, table: Days): Summary {
  *
  * @returns {Period["activity"]} activity
  */
-function activity(
+export function activity(
   window: Window,
   daily: Float64Array,
   todayHours: number[],
@@ -361,26 +399,25 @@ function activity(
 }
 
 /**
- * rank values by merged time, takatime's list stats
+ * rank values by time, ties by name so the order never depends on how the time was summed
  *
- * @param groups spans per value
+ * @param totals seconds per value
  * @param limit max items
  *
  * @returns {Item[]} items, shares relative to the sum of all items
  */
-function rank(groups: Map<string, number[]>, limit = LIST_LIMIT): Item[] {
+export function rankTotals(totals: Iterable<[string, number]>, limit = LIST_LIMIT): Item[] {
   const items: Item[] = []
   let total = 0
 
-  for (const [name, spans] of groups) {
-    const seconds = trueDuration(spans)
+  for (const [name, seconds] of totals) {
     if (seconds <= 0) continue
 
     items.push({ name, seconds, share: 0 })
     total += seconds
   }
 
-  items.sort((a, b) => b.seconds - a.seconds)
+  items.sort((a, b) => b.seconds - a.seconds || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
 
   return items.slice(0, limit).map((item) => ({
     name: item.name,
@@ -388,6 +425,20 @@ function rank(groups: Map<string, number[]>, limit = LIST_LIMIT): Item[] {
     share: total ? Math.round((item.seconds / total) * 10_000) / 10_000 : 0,
   }))
 }
+
+/**
+ * rank values by merged time, takatime's list stats
+ *
+ * @param groups spans per value
+ * @param limit max items
+ *
+ * @returns {Item[]} items, shares relative to the sum of all items
+ */
+export const rank = (groups: Map<string, number[]>, limit = LIST_LIMIT): Item[] =>
+  rankTotals(
+    [...groups].map(([name, spans]): [string, number] => [name, trueDuration(spans)]),
+    limit
+  )
 
 /**
  * pick the values with the most time
@@ -404,68 +455,46 @@ const top = (tally: Map<string, number>, count: number): string[] =>
     .map(([name]) => name)
 
 /**
- * per dimension rankings for every range in one pass, plus work sessions
- * ranges all end now and are nested, so each log lands in a prefix of them
+ * add time to a tally
  *
- * @param list entries ordered by start
- * @param froms start of each range, epoch ms
- * @param to end of today, epoch ms
- *
- * @returns rankings per range and the latest sessions
+ * @param tally target
+ * @param key value
+ * @param seconds time
  */
-function groups(list: readonly Entry[], froms: number[], to: number) {
-  const spans: Spans[] = froms.map(() => ({
-    project: new Map(),
-    language: new Map(),
-    editor: new Map(),
-    os: new Map(),
-    branch: new Map(),
-    file: new Map(),
-  }))
-  const dimensions = Object.keys(spans[0]) as (Dimension | "file")[]
+const count = (tally: Map<string, number>, key: string, seconds: number) =>
+  tally.set(key, (tally.get(key) ?? 0) + seconds)
 
-  type Open = Session & {
-    languageTally: Map<string, number>
-    editorTally: Map<string, number>
-    branchTally: Map<string, number>
-  }
+/**
+ * a session still being built, with time per language, editor and branch
+ */
+type OpenSession = Session & {
+  // position in the list, so a clone can take its place
+  index: number
+  languageTally: Map<string, number>
+  editorTally: Map<string, number>
+  branchTally: Map<string, number>
+}
 
-  const sessions: Open[] = []
-  // projects worked on side by side keep their own session going
-  const open = new Map<string, Open>()
+/**
+ * work sessions, built from logs in start order
+ * projects worked on side by side keep their own session going
+ */
+export class Sessions {
+  // every session in the order it started
+  list: OpenSession[] = []
+  // the latest session per project, the only ones a later log can extend
+  private open = new Map<string, OpenSession>()
 
   /**
-   * add time to a tally
+   * add a log, starting a session or extending its project's latest one
    *
-   * @param tally target
-   * @param key value
-   * @param seconds time
+   * @param entry log, starting before to
+   * @param to end of today, logs are cut off there
    */
-  const count = (tally: Map<string, number>, key: string, seconds: number) =>
-    tally.set(key, (tally.get(key) ?? 0) + seconds)
-
-  for (const entry of list) {
-    if (entry.start >= to) continue
-
-    for (let range = 0; range < froms.length; range++) {
-      if (entry.end <= froms[range]) continue
-
-      const start = Math.max(entry.start, froms[range])
-      const end = Math.min(entry.end, to)
-
-      for (const dimension of dimensions) {
-        const map = spans[range][dimension]
-        const list = map.get(entry[dimension])
-
-        if (list) list.push(start, end)
-        else map.set(entry[dimension], [start, end])
-      }
-    }
-
-    // sessions
+  add(entry: Entry, to: number) {
     const { start } = entry
     const end = Math.min(entry.end, to)
-    let current = open.get(entry.project)
+    let current = this.open.get(entry.project)
 
     if (!current || start - current.end > SESSION_GAP) {
       current = {
@@ -476,12 +505,13 @@ function groups(list: readonly Entry[], froms: number[], to: number) {
         languages: [],
         editor: "",
         branch: "",
+        index: this.list.length,
         languageTally: new Map(),
         editorTally: new Map(),
         branchTally: new Map(),
       }
-      sessions.push(current)
-      open.set(entry.project, current)
+      this.list.push(current)
+      this.open.set(entry.project, current)
     }
 
     // only the part past what the session already covers is new time
@@ -496,21 +526,147 @@ function groups(list: readonly Entry[], froms: number[], to: number) {
   }
 
   /**
-   * close an open session for output
+   * a copy that can keep growing without touching this one
+   * finished sessions are shared, only the ones a log could still extend are copied
+   *
+   * @returns {Sessions} copy
+   */
+  clone(): Sessions {
+    const copy = new Sessions()
+    copy.list = this.list.slice()
+
+    for (const [project, session] of this.open) {
+      const twin: OpenSession = {
+        ...session,
+        languageTally: new Map(session.languageTally),
+        editorTally: new Map(session.editorTally),
+        branchTally: new Map(session.branchTally),
+      }
+
+      copy.list[twin.index] = twin
+      copy.open.set(project, twin)
+    }
+
+    return copy
+  }
+
+  /**
+   * how many sessions started at or after an instant
+   *
+   * @param from epoch ms
+   *
+   * @returns {number} count
+   */
+  countFrom(from: number): number {
+    // sessions start in order, so the first one in range splits the list
+    let low = 0
+    let high = this.list.length
+
+    while (low < high) {
+      const middle = (low + high) >> 1
+
+      if (this.list[middle].start < from) low = middle + 1
+      else high = middle
+    }
+
+    return this.list.length - low
+  }
+
+  /**
+   * the latest sessions, newest first
+   *
+   * @param limit how many
+   *
+   * @returns {Session[]} sessions
+   */
+  latest(limit = SESSION_LIMIT): Session[] {
+    return this.list.slice(-limit).reverse().map(Sessions.finish)
+  }
+
+  /**
+   * the longest session starting at or after an instant
+   * only sessions starting in the range, one carried over from before could outgrow it
+   *
+   * @param from epoch ms
+   *
+   * @returns {Session | null} session
+   */
+  longest(from: number): Session | null {
+    let found: OpenSession | null = null
+
+    for (const session of this.list) {
+      if (session.start >= from && (!found || session.seconds > found.seconds)) {
+        found = session
+      }
+    }
+
+    return found && Sessions.finish(found)
+  }
+
+  /**
+   * close a session for output
    *
    * @param session open session
    *
    * @returns {Session} session
    */
-  const finish = ({ languageTally, editorTally, branchTally, ...session }: Open): Session => ({
-    ...session,
-    start: Math.round(session.start),
-    end: Math.round(session.end),
-    seconds: Math.round(session.seconds),
-    languages: top(languageTally, 3),
-    editor: top(editorTally, 1)[0] ?? "",
-    branch: top(branchTally, 1)[0] ?? "",
-  })
+  static finish({ languageTally, editorTally, branchTally, index, ...session }: OpenSession): Session {
+    void index
+
+    return {
+      ...session,
+      start: Math.round(session.start),
+      end: Math.round(session.end),
+      seconds: Math.round(session.seconds),
+      languages: top(languageTally, 3),
+      editor: top(editorTally, 1)[0] ?? "",
+      branch: top(branchTally, 1)[0] ?? "",
+    }
+  }
+}
+
+/**
+ * per dimension rankings for every range in one pass, plus work sessions
+ * ranges all end now and are nested, so each log lands in a prefix of them
+ *
+ * @param list entries ordered by start
+ * @param froms start of each range, epoch ms
+ * @param to end of today, epoch ms
+ *
+ * @returns rankings per range and the latest sessions
+ */
+export function groups(list: readonly Entry[], froms: number[], to: number) {
+  const spans: Spans[] = froms.map(() => ({
+    project: new Map(),
+    language: new Map(),
+    editor: new Map(),
+    os: new Map(),
+    branch: new Map(),
+    file: new Map(),
+  }))
+
+  const sessions = new Sessions()
+
+  for (const entry of list) {
+    if (entry.start >= to) continue
+
+    for (let range = 0; range < froms.length; range++) {
+      if (entry.end <= froms[range]) continue
+
+      const start = Math.max(entry.start, froms[range])
+      const end = Math.min(entry.end, to)
+
+      for (const dimension of BREAKDOWNS) {
+        const map = spans[range][dimension]
+        const list = map.get(entry[dimension])
+
+        if (list) list.push(start, end)
+        else map.set(entry[dimension], [start, end])
+      }
+    }
+
+    sessions.add(entry, to)
+  }
 
   return {
     rankings: spans.map((ranges, index) => ({
@@ -523,36 +679,31 @@ function groups(list: readonly Entry[], froms: number[], to: number) {
       },
       files: rank(ranges.file, FILE_LIMIT),
       // a session counts towards the range it started in
-      sessionCount: sessions.filter((session) => session.start >= froms[index]).length,
+      sessionCount: sessions.countFrom(froms[index]),
     })),
-    sessions: sessions.slice(-SESSION_LIMIT).reverse().map(finish),
-    // only sessions starting in the range, one carried over from before could outgrow it
-    longest: froms.map((from) => {
-      let found: Open | null = null
-
-      for (const session of sessions) {
-        if (session.start >= from && (!found || session.seconds > found.seconds)) {
-          found = session
-        }
-      }
-
-      return found && finish(found)
-    }),
+    sessions: sessions.latest(),
+    longest: froms.map((from) => sessions.longest(from)),
   }
 }
 
 /**
  * the most recent log across everything
  *
- * @param list entries
+ * @param list entries ordered by start
+ * @param maxDuration longest log, lets the scan stop early
  *
  * @returns {Latest | null} latest
  */
-function latest(list: readonly Entry[]): Latest | null {
+export function latest(list: readonly Entry[], maxDuration = Infinity): Latest | null {
   let found: Entry | null = null
 
-  for (const entry of list) {
-    if (!found || entry.end > found.end) found = entry
+  // from the newest start back, a log starting too early to end later cannot win
+  for (let index = list.length - 1; index >= 0; index--) {
+    const entry = list[index]
+    if (found && entry.start + maxDuration < found.end) break
+
+    // ties go to the earliest start, as a forward scan would pick
+    if (!found || entry.end >= found.end) found = entry
   }
 
   if (!found) return null
@@ -563,80 +714,24 @@ function latest(list: readonly Entry[]): Latest | null {
 }
 
 /**
- * compute everything the dashboard shows for a view, across every range
- *
- * @param view view
- * @param all every entry, ordered by start
- * @param now current instant
- *
- * @returns {Snapshot} snapshot
- */
-export function snapshot(view: View, all: readonly Entry[], now: number): Omit<Snapshot, "imports"> {
-  const { filter } = view
-  const list = filter ? all.filter((entry) => entry[filter.dimension] === filter.value) : all
-
-  const table = days(view.tz, all[0]?.start ?? now, now)
-
-  // "all" covers the whole table for the hour of day split, its real start needs the totals
-  const drafts = RANGES.map((range) => window(table, range, 0))
-  const { daily, hours, focused } = distribute(
-    list,
-    table,
-    drafts.map((draft) => [draft.from, table.today]),
-    table.today
-  )
-
-  const firstActive = daily.findIndex((seconds) => seconds > 0)
-  const windows = RANGES.map((range) => window(table, range, firstActive === -1 ? table.today : firstActive))
-
-  const end = table.starts[table.today + 1]
-  const froms = windows.map((window) => table.starts[Math.max(window.from, 0)])
-  const { rankings, sessions } = groups(list, froms, end)
-
-  // the calendar starts on a sunday, a year back
-  const yearAgo = table.today - 364
-  const calendarStart = yearAgo - weekday(table.keys[yearAgo])
-
-  const ranges = Object.fromEntries(
-    windows.map((window, index) => [
-      window.range,
-      {
-        start: froms[index],
-        activity: activity(window, daily, focused, table, now),
-        hours: hours[index].map(Math.round),
-        ...rankings[index],
-      },
-    ])
-  ) as Record<Range, Period>
-
-  return {
-    view,
-    empty: all.length === 0,
-    latest: latest(all),
-    summary: summarize(daily, table),
-    calendar: {
-      start: table.keys[calendarStart],
-      days: Array.from(daily.subarray(calendarStart, table.today + 1), Math.round),
-    },
-    sessions,
-    ranges,
-  }
-}
-
-/**
  * detailed insights for a span of days, opened from the charts
+ * only reads the logs that can reach the period, its comparison and the sessions starting in it
  *
  * @param view view
  * @param all every entry, ordered by start
  * @param now current instant
  * @param period first and last day, inclusive
+ * @param maxDuration longest log, bounds how far back logs can reach
  *
  * @returns {Detail} detail
  */
-export function detail(view: View, all: readonly Entry[], now: number, period: PeriodRange): Detail {
-  const { filter } = view
-  const list = filter ? all.filter((entry) => entry[filter.dimension] === filter.value) : all
-
+export function detail(
+  view: View,
+  all: readonly Entry[],
+  now: number,
+  period: PeriodRange,
+  maxDuration = Infinity
+): Detail {
   // whole months compare against the month before, anything else against the same span
   const month = period.from.endsWith("-01") && monthStart(period.from, -1) === nextDay(period.to)
   const length = (Date.parse(period.to) - Date.parse(period.from)) / DAY + 1
@@ -646,6 +741,12 @@ export function detail(view: View, all: readonly Entry[], now: number, period: P
 
   // reach back to the compared period, logs may start later than it, a day of margin covers any offset
   const table = days(view.tz, Math.min(all[0]?.start ?? now, Date.parse(earliest) - DAY), now)
+
+  // what happens before the comparison starts, or a session gap before the period, cannot matter
+  const reach = Math.min(table.starts[Math.max(keyIndex(table, earliest), 0)], Date.parse(period.from) - DAY)
+  const lower = lowerBound(all, reach - SESSION_GAP - maxDuration)
+  const upper = lowerBound(all, Date.parse(period.to) + 2 * DAY)
+  const list = filtered(lower === 0 && upper === all.length ? all : all.slice(lower, upper), view.filter)
 
   // a period in the future comes back empty
   const from = Math.min(Math.max(keyIndex(table, period.from), 0), table.today + 1)
