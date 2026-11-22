@@ -1,4 +1,4 @@
-import type { PeriodRange } from "@/lib/stats/types";
+import type { PeriodRange } from "@/lib/stats/types"
 
 /**
  * a single day
@@ -7,7 +7,7 @@ import type { PeriodRange } from "@/lib/stats/types";
  *
  * @returns {PeriodRange} period
  */
-export const dayPeriod = (key: string): PeriodRange => ({ from: key, to: key });
+export const dayPeriod = (key: string): PeriodRange => ({ from: key, to: key })
 
 /**
  * a whole calendar month
@@ -17,13 +17,13 @@ export const dayPeriod = (key: string): PeriodRange => ({ from: key, to: key });
  * @returns {PeriodRange} period
  */
 export function monthPeriod(month: string): PeriodRange {
-  const [year, index] = month.split("-").map(Number);
-  const last = new Date(Date.UTC(year, index, 0)).getUTCDate();
+  const [year, index] = month.split("-").map(Number)
+  const last = new Date(Date.UTC(year, index, 0)).getUTCDate()
 
   return {
     from: `${month}-01`,
     to: `${month}-${String(last).padStart(2, "0")}`,
-  };
+  }
 }
 
 /**
@@ -34,8 +34,7 @@ export function monthPeriod(month: string): PeriodRange {
  * @returns {boolean} whether it is a whole month
  */
 export const isMonth = (period: PeriodRange): boolean =>
-  monthPeriod(period.from.slice(0, 7)).to === period.to &&
-  period.from.endsWith("-01");
+  monthPeriod(period.from.slice(0, 7)).to === period.to && period.from.endsWith("-01")
 
 /**
  * whether two periods cover the same days
@@ -45,7 +44,5 @@ export const isMonth = (period: PeriodRange): boolean =>
  *
  * @returns {boolean} whether they match
  */
-export const samePeriod = (
-  a: PeriodRange | null | undefined,
-  b: PeriodRange | null | undefined,
-): boolean => !!a && !!b && a.from === b.from && a.to === b.to;
+export const samePeriod = (a: PeriodRange | null | undefined, b: PeriodRange | null | undefined): boolean =>
+  !!a && !!b && a.from === b.from && a.to === b.to

@@ -6,154 +6,159 @@
 
 /* self hosted fonts, preloaded in the main layout */
 @font-face {
-    font-family: 'Figtree';
-    font-style: normal;
-    font-display: block;
-    font-weight: 300 900;
-    src: url('/static/fonts/figtree_variable.woff2') format('woff2');
+  font-family: "Figtree";
+  font-style: normal;
+  font-display: block;
+  font-weight: 300 900;
+  src: url("/static/fonts/figtree_variable.woff2") format("woff2");
 }
 
 @font-face {
-    font-family: 'Inter';
-    font-style: normal;
-    font-display: block;
-    font-weight: 100 900;
-    src: url('/static/fonts/inter_variable.woff2') format('woff2');
+  font-family: "Inter";
+  font-style: normal;
+  font-display: block;
+  font-weight: 100 900;
+  src: url("/static/fonts/inter_variable.woff2") format("woff2");
 }
 
 :root {
-    --background: var(--tt-bg);
-    --foreground: var(--tt-text);
-    --card: color-mix(in oklab, var(--tt-bar) 35%, var(--tt-bg));
-    --card-foreground: var(--tt-text);
-    --popover: color-mix(in oklab, var(--tt-bar) 70%, var(--tt-bg));
-    --popover-foreground: var(--tt-text);
-    --primary: var(--tt-c1);
-    --primary-foreground: var(--tt-bg);
-    --secondary: var(--tt-bar);
-    --secondary-foreground: var(--tt-text);
-    --muted: var(--tt-bar);
-    --muted-foreground: color-mix(in oklab, var(--tt-sub) 80%, var(--tt-text));
-    --accent: var(--tt-bar);
-    --accent-foreground: var(--tt-text);
-    --destructive: oklch(0.65 0.2 25);
-    --border: color-mix(in oklab, var(--tt-text) 11%, transparent);
-    --input: color-mix(in oklab, var(--tt-text) 15%, transparent);
-    --ring: var(--tt-c1);
-    --chart-1: var(--tt-c1);
-    --chart-2: var(--tt-c2);
-    --chart-3: var(--tt-c3);
-    --chart-4: var(--tt-c4);
-    --chart-5: var(--tt-sub);
-    --radius: 0.625rem;
-    --sidebar: var(--card);
-    --sidebar-foreground: var(--tt-text);
-    --sidebar-primary: var(--tt-c1);
-    --sidebar-primary-foreground: var(--tt-bg);
-    --sidebar-accent: var(--tt-bar);
-    --sidebar-accent-foreground: var(--tt-text);
-    --sidebar-border: var(--border);
-    --sidebar-ring: var(--tt-c1);
+  --background: var(--tt-bg);
+  --foreground: var(--tt-text);
+  --card: color-mix(in oklab, var(--tt-bar) 35%, var(--tt-bg));
+  --card-foreground: var(--tt-text);
+  --popover: color-mix(in oklab, var(--tt-bar) 70%, var(--tt-bg));
+  --popover-foreground: var(--tt-text);
+  --primary: var(--tt-c1);
+  --primary-foreground: var(--tt-bg);
+  --secondary: var(--tt-bar);
+  --secondary-foreground: var(--tt-text);
+  --muted: var(--tt-bar);
+  --muted-foreground: color-mix(in oklab, var(--tt-sub) 80%, var(--tt-text));
+  --accent: var(--tt-bar);
+  --accent-foreground: var(--tt-text);
+  --destructive: oklch(0.65 0.2 25);
+  --border: color-mix(in oklab, var(--tt-text) 11%, transparent);
+  --input: color-mix(in oklab, var(--tt-text) 15%, transparent);
+  --ring: var(--tt-c1);
+  --chart-1: var(--tt-c1);
+  --chart-2: var(--tt-c2);
+  --chart-3: var(--tt-c3);
+  --chart-4: var(--tt-c4);
+  --chart-5: var(--tt-sub);
+  --radius: 0.625rem;
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--tt-text);
+  --sidebar-primary: var(--tt-c1);
+  --sidebar-primary-foreground: var(--tt-bg);
+  --sidebar-accent: var(--tt-bar);
+  --sidebar-accent-foreground: var(--tt-text);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--tt-c1);
 }
 
 /* takatime default palette until the theme script runs, themes live in lib/themes.ts */
 :root:not([data-theme]) {
-    --tt-bg: #0d1117;
-    --tt-text: #ffffff;
-    --tt-sub: #8b949e;
-    --tt-bar: #30363d;
-    --tt-c1: #58a6ff;
-    --tt-c2: #2ea043;
-    --tt-c3: #e3b341;
-    --tt-c4: #f78166;
+  --tt-bg: #0d1117;
+  --tt-text: #ffffff;
+  --tt-sub: #8b949e;
+  --tt-bar: #30363d;
+  --tt-c1: #58a6ff;
+  --tt-c2: #2ea043;
+  --tt-c3: #e3b341;
+  --tt-c4: #f78166;
 }
 
 @theme inline {
-    --font-sans: 'Figtree', sans-serif;
-    --font-heading: 'Inter', sans-serif;
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
-    --color-ring: var(--ring);
-    --color-input: var(--input);
-    --color-border: var(--border);
-    --color-destructive: var(--destructive);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-accent: var(--accent);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-secondary: var(--secondary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-primary: var(--primary);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-popover: var(--popover);
-    --color-card-foreground: var(--card-foreground);
-    --color-card: var(--card);
-    --color-foreground: var(--foreground);
-    --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
+  --font-sans: "Figtree", sans-serif;
+  --font-heading: "Inter", sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 /* subtle scrollbars for the scrollable sections */
 @utility scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
   /* no focus rings from clicks or restored focus, see the keyboard rule below */
   :focus,
   :focus-visible {
     outline: none;
-    }
+  }
   body {
     @apply bg-background text-foreground;
-    }
+  }
   /* anything interactive shows the pointer, unless disabled */
   :is(
-      a[href],
-      button,
-      summary,
-      select,
-      label[for],
-      [role="button"],
-      [role="tab"],
-      [role="menuitem"],
-      [role="menuitemradio"],
-      [role="menuitemcheckbox"],
-      [role="option"],
-      [role="switch"],
-      [role="checkbox"],
-      [role="radio"]
-    ):not(:disabled, [aria-disabled="true"], [data-disabled]) {
+    a[href],
+    button,
+    summary,
+    select,
+    label[for],
+    [role="button"],
+    [role="tab"],
+    [role="menuitem"],
+    [role="menuitemradio"],
+    [role="menuitemcheckbox"],
+    [role="option"],
+    [role="switch"],
+    [role="checkbox"],
+    [role="radio"]
+  ):not(:disabled, [aria-disabled="true"], [data-disabled]) {
     cursor: pointer;
-    }
+  }
   html {
     @apply font-sans;
-    }
-  h1, h2, h3, h4, h5, h6 {
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-heading;
-    }
+  }
 }
 
 /*
@@ -162,6 +167,14 @@
  * unlayered so component utilities such as outline-none cannot hide it
  */
 [data-focus="keyboard"] :focus {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/*
+ * names hidden in settings for screen sharing, set before first paint by the settings script
+ */
+[data-private] [data-sensitive] {
+  filter: blur(5px);
+  user-select: none;
 }

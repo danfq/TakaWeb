@@ -1,3 +1,3 @@
-import { bootstrap } from "@/lib/server/auth/admin";
+import { bootstrap } from "@/lib/server/auth/admin"
 
-bootstrap();
+bootstrap()

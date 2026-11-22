@@ -1,31 +1,48 @@
-import { ActionError, defineAction } from "astro:actions";
-import { z } from "astro/zod";
-import {
-  createAdmin,
-  getAdmin,
-  hasAdmin,
-  verifySetupToken,
-} from "@/lib/server/auth/admin";
-import {
-  clearFailures,
-  isLimited,
-  recordFailure,
-} from "@/lib/server/auth/limiter";
-import { hashPassword, verifyPassword } from "@/lib/server/auth/password";
+import { ActionError, defineAction, type ActionAPIContext } from "astro:actions"
+import { z } from "astro/zod"
+import { createAdmin, getAdmin, hasAdmin, verifySetupToken } from "@/lib/server/auth/admin"
+import { clearFailures, isLimited, recordFailure } from "@/lib/server/auth/limiter"
+import { hashPassword, verifyPassword } from "@/lib/server/auth/password"
 import {
   createSession,
   deleteSessionCookie,
   invalidateSession,
   setSessionCookie,
-} from "@/lib/server/auth/session";
+} from "@/lib/server/auth/session"
+import { importHeartbeats, importedCount, removeImported } from "@/lib/server/imports"
+import { importsChanged } from "@/lib/server/stats/store"
+import { LookupError, lookupAgents } from "@/lib/server/wakatime"
+import { IMPORT_BATCH, IMPORT_LIMITS } from "@/lib/wakatime"
 
 /**
  * password policy, capped to keep hashing cheap
  */
-const password = z
-  .string()
-  .min(12, "Use at least 12 characters")
-  .max(128, "Use at most 128 characters");
+const password = z.string().min(12, "Use at least 12 characters").max(128, "Use at most 128 characters")
+
+/**
+ * a wakatime heartbeat as sent by the import, see ImportHeartbeat
+ * times outside the range are skipped rather than rejected, so clock skew never stalls a whole batch
+ */
+const importHeartbeat = z.object({
+  time: z.number().int(),
+  file: z.string().min(1).max(IMPORT_LIMITS.file),
+  project: z.string().max(IMPORT_LIMITS.project),
+  language: z.string().max(IMPORT_LIMITS.language),
+  branch: z.string().max(IMPORT_LIMITS.branch),
+  editor: z.string().max(IMPORT_LIMITS.editor),
+  os: z.string().max(IMPORT_LIMITS.os),
+})
+
+/**
+ * reject a request without a signed in admin
+ *
+ * @param context action context
+ */
+function assertUser(context: ActionAPIContext) {
+  if (!context.locals.user) {
+    throw new ActionError({ code: "UNAUTHORIZED", message: "Sign in first" })
+  }
+}
 
 /**
  * reject a request once its key ran out of attempts
@@ -37,7 +54,7 @@ function assertNotLimited(key: string) {
     throw new ActionError({
       code: "TOO_MANY_REQUESTS",
       message: "Too many attempts, try again in a few minutes",
-    });
+    })
   }
 }
 
@@ -59,40 +76,40 @@ export const server = {
           path: ["confirm"],
         }),
       handler: async (input, context) => {
-        const key = `setup:${context.clientAddress}`;
-        assertNotLimited(key);
+        const key = `setup:${context.clientAddress}`
+        assertNotLimited(key)
 
         if (hasAdmin()) {
           throw new ActionError({
             code: "CONFLICT",
             message: "The admin account already exists",
-          });
+          })
         }
 
         if (!verifySetupToken(input.token)) {
-          recordFailure(key);
+          recordFailure(key)
 
           throw new ActionError({
             code: "UNAUTHORIZED",
             message: "Invalid setup token",
-          });
+          })
         }
 
         // the unique username guards against concurrent setups
-        const adminId = createAdmin(await hashPassword(input.password));
+        const adminId = createAdmin(await hashPassword(input.password))
 
         if (adminId === null) {
           throw new ActionError({
             code: "CONFLICT",
             message: "The admin account already exists",
-          });
+          })
         }
 
-        clearFailures(key);
-        console.log("[takaweb] admin account created");
+        clearFailures(key)
+        console.log("[takaweb] admin account created")
 
-        const { token, expiresAt } = createSession(adminId);
-        setSessionCookie(context, token, expiresAt);
+        const { token, expiresAt } = createSession(adminId)
+        setSessionCookie(context, token, expiresAt)
       },
     }),
 
@@ -105,24 +122,24 @@ export const server = {
         password: z.string().min(1, "Enter your password").max(128),
       }),
       handler: async (input, context) => {
-        const key = `login:${context.clientAddress}`;
-        assertNotLimited(key);
+        const key = `login:${context.clientAddress}`
+        assertNotLimited(key)
 
-        const admin = getAdmin();
+        const admin = getAdmin()
 
         if (!admin || !(await verifyPassword(input.password, admin.passwordHash))) {
-          recordFailure(key);
+          recordFailure(key)
 
           throw new ActionError({
             code: "UNAUTHORIZED",
             message: "Incorrect password",
-          });
+          })
         }
 
-        clearFailures(key);
+        clearFailures(key)
 
-        const { token, expiresAt } = createSession(admin.id);
-        setSessionCookie(context, token, expiresAt);
+        const { token, expiresAt } = createSession(admin.id)
+        setSessionCookie(context, token, expiresAt)
       },
     }),
 
@@ -131,9 +148,72 @@ export const server = {
      */
     logout: defineAction({
       handler: (_, context) => {
-        if (context.locals.session) invalidateSession(context.locals.session.id);
-        deleteSessionCookie(context);
+        if (context.locals.session) invalidateSession(context.locals.session.id)
+        deleteSessionCookie(context)
       },
     }),
   },
-};
+
+  wakatime: {
+    /**
+     * how many heartbeats came from wakatime
+     */
+    status: defineAction({
+      handler: (_, context) => {
+        assertUser(context)
+
+        return { imported: importedCount() }
+      },
+    }),
+
+    /**
+     * name the editors and systems behind wakatime user agents, the token is never stored
+     */
+    agents: defineAction({
+      input: z.object({ token: z.string().trim().min(1).max(512) }),
+      handler: async (input, context) => {
+        assertUser(context)
+
+        try {
+          return await lookupAgents(input.token)
+        } catch (error) {
+          if (!(error instanceof LookupError)) throw error
+
+          throw new ActionError({
+            code: error.rejected ? "BAD_REQUEST" : "BAD_GATEWAY",
+            message: error.message,
+          })
+        }
+      },
+    }),
+
+    /**
+     * store a batch of heartbeats read from a wakatime export
+     */
+    import: defineAction({
+      input: z.object({ heartbeats: z.array(importHeartbeat).max(IMPORT_BATCH) }),
+      handler: (input, context) => {
+        assertUser(context)
+
+        const result = importHeartbeats(input.heartbeats)
+        if (result.added) importsChanged()
+
+        return result
+      },
+    }),
+
+    /**
+     * delete every heartbeat a wakatime import added
+     */
+    remove: defineAction({
+      handler: (_, context) => {
+        assertUser(context)
+
+        const removed = removeImported()
+        if (removed) importsChanged()
+
+        return { removed }
+      },
+    }),
+  },
+}

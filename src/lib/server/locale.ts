@@ -1,4 +1,4 @@
-const FALLBACK = "en-US";
+const FALLBACK = "en-US"
 
 /**
  * pick the browser's preferred locale from its accept-language header
@@ -11,18 +11,18 @@ export function preferredLocale(header: string | null): string {
   const tags = (header ?? "")
     .split(",")
     .map((part) => {
-      const [tag, quality] = part.trim().split(";q=");
-      return { tag, quality: quality ? Number(quality) : 1 };
+      const [tag, quality] = part.trim().split(";q=")
+      return { tag, quality: quality ? Number(quality) : 1 }
     })
     .filter(({ tag }) => tag && tag !== "*")
-    .sort((a, b) => b.quality - a.quality);
+    .sort((a, b) => b.quality - a.quality)
 
   for (const { tag } of tags) {
     try {
-      const [supported] = Intl.DateTimeFormat.supportedLocalesOf(tag);
-      if (supported) return supported;
+      const [supported] = Intl.DateTimeFormat.supportedLocalesOf(tag)
+      if (supported) return supported
     } catch {}
   }
 
-  return FALLBACK;
+  return FALLBACK
 }

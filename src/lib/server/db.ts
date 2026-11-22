@@ -1,12 +1,13 @@
-import { mkdirSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { TAKAWEB_DATA_DIR } from "astro:env/server";
+import { mkdirSync } from "node:fs"
+import { join, resolve } from "node:path"
+import { DatabaseSync } from "node:sqlite"
+import { TAKAWEB_DATA_DIR } from "astro:env/server"
 
 /**
  * schema migrations, applied in order and tracked via user_version
+ * plain sql, or a function for steps that depend on what the database already has
  */
-const migrations = [
+const migrations: (string | ((database: DatabaseSync) => void))[] = [
   `
   CREATE TABLE user (
     id INTEGER PRIMARY KEY,
@@ -24,7 +25,64 @@ const migrations = [
 
   CREATE INDEX session_user_id ON session (user_id);
   `,
-];
+  // coding time imported from other trackers, kept here so the takatime mongo stays read-only
+  `
+  CREATE TABLE imported_log (
+    source TEXT NOT NULL,
+    id TEXT NOT NULL,
+    start INTEGER NOT NULL,
+    end INTEGER NOT NULL,
+    project TEXT NOT NULL,
+    language TEXT NOT NULL,
+    editor TEXT NOT NULL,
+    os TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    file TEXT NOT NULL,
+    PRIMARY KEY (source, id)
+  ) WITHOUT ROWID;
+  `,
+  // finds imported logs a re-import overlaps
+  `
+  CREATE INDEX imported_log_start ON imported_log (source, start);
+  `,
+  // imports keep heartbeats and join them on read, so overlapping exports add up the same in any order
+  // each stored log becomes the heartbeat it started at, plus a boundary where it ended so its time is kept
+  // a boundary is no real activity: a heartbeat at the same instant owns what follows instead
+  `
+  CREATE TABLE imported_heartbeat (
+    source TEXT NOT NULL,
+    time INTEGER NOT NULL,
+    file TEXT NOT NULL,
+    project TEXT NOT NULL,
+    language TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    editor TEXT NOT NULL,
+    os TEXT NOT NULL,
+    boundary INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (source, time, file)
+  ) WITHOUT ROWID;
+
+  INSERT OR IGNORE INTO imported_heartbeat (source, time, file, project, language, branch, editor, os)
+  SELECT source, start, file, project, language, branch, editor, os FROM imported_log;
+
+  INSERT OR IGNORE INTO imported_heartbeat (source, time, file, project, language, branch, editor, os, boundary)
+  SELECT source, end, file, project, language, branch, editor, os, 1 FROM imported_log AS log
+  WHERE NOT EXISTS (
+    SELECT 1 FROM imported_heartbeat AS beat WHERE beat.source = log.source AND beat.time = log.end
+  );
+
+  DROP TABLE imported_log;
+  `,
+  // databases that ran the step above before it marked boundaries lack the column,
+  // theirs can no longer be told apart, so they stay plain heartbeats
+  (database) => {
+    const columns = database.prepare("SELECT name FROM pragma_table_info('imported_heartbeat')").all()
+
+    if (!columns.some((column) => column.name === "boundary")) {
+      database.exec("ALTER TABLE imported_heartbeat ADD COLUMN boundary INTEGER NOT NULL DEFAULT 0")
+    }
+  },
+]
 
 /**
  * run a callback inside a write transaction
@@ -35,16 +93,16 @@ const migrations = [
  * @returns {T} callback result
  */
 export function transaction<T>(database: DatabaseSync, fn: () => T): T {
-  database.exec("BEGIN IMMEDIATE");
+  database.exec("BEGIN IMMEDIATE")
 
   try {
-    const result = fn();
-    database.exec("COMMIT");
+    const result = fn()
+    database.exec("COMMIT")
 
-    return result;
+    return result
   } catch (error) {
-    database.exec("ROLLBACK");
-    throw error;
+    database.exec("ROLLBACK")
+    throw error
   }
 }
 
@@ -54,15 +112,17 @@ export function transaction<T>(database: DatabaseSync, fn: () => T): T {
  * @param database target database
  */
 function migrate(database: DatabaseSync) {
-  const { user_version: version } = database
-    .prepare("PRAGMA user_version")
-    .get() as { user_version: number };
+  const { user_version: version } = database.prepare("PRAGMA user_version").get() as { user_version: number }
 
   for (let index = version; index < migrations.length; index++) {
+    const migration = migrations[index]
+
     transaction(database, () => {
-      database.exec(migrations[index]);
-      database.exec(`PRAGMA user_version = ${index + 1}`);
-    });
+      if (typeof migration === "string") database.exec(migration)
+      else migration(database)
+
+      database.exec(`PRAGMA user_version = ${index + 1}`)
+    })
   }
 }
 
@@ -72,22 +132,25 @@ function migrate(database: DatabaseSync) {
  * @returns {DatabaseSync} database
  */
 function open(): DatabaseSync {
-  const dir = resolve(TAKAWEB_DATA_DIR);
-  mkdirSync(dir, { recursive: true });
+  const dir = resolve(TAKAWEB_DATA_DIR)
+  mkdirSync(dir, { recursive: true })
 
-  const database = new DatabaseSync(join(dir, "takaweb.db"));
+  const database = new DatabaseSync(join(dir, "takaweb.db"))
   database.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
     PRAGMA busy_timeout = 5000;
-  `);
+  `)
 
-  migrate(database);
+  migrate(database)
 
-  return database;
+  return database
 }
 
 // reuse the handle across dev reloads
-const globals = globalThis as typeof globalThis & { __takawebDb?: DatabaseSync };
+const globals = globalThis as typeof globalThis & { __takawebDb?: DatabaseSync }
 
-export const db = (globals.__takawebDb ??= open());
+export const db = (globals.__takawebDb ??= open())
+
+// a reused handle still picks up migrations added since it opened
+migrate(db)

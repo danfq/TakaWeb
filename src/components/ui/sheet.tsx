@@ -46,9 +46,7 @@ const RESIZE_STEP = 32
  * @returns {number} clamped width
  */
 const clampWidth = (width: number): number =>
-  Math.round(
-    Math.min(Math.max(width, MIN_WIDTH), window.innerWidth * MAX_WIDTH_RATIO)
-  )
+  Math.round(Math.min(Math.max(width, MIN_WIDTH), window.innerWidth * MAX_WIDTH_RATIO))
 
 /**
  * a side sheet width the user can drag, remembered per sheet
@@ -125,7 +123,7 @@ function SheetResizeHandle({
       tabIndex={0}
       data-side={side}
       data-dragging={dragging || undefined}
-      className="group/resize absolute inset-y-0 z-10 w-3 cursor-col-resize touch-none outline-none select-none max-sm:hidden data-[side=left]:-right-1.5 data-[side=right]:-left-1.5"
+      className="group/resize absolute inset-y-0 z-10 w-3 cursor-col-resize touch-none outline-none select-none data-[side=left]:-right-1.5 data-[side=right]:-left-1.5 max-sm:hidden"
       onPointerDown={(event) => {
         event.preventDefault()
         event.currentTarget.setPointerCapture(event.pointerId)
@@ -149,14 +147,11 @@ function SheetResizeHandle({
         if (event.key !== grow && event.key !== shrink) return
 
         event.preventDefault()
-        const next = clampWidth(
-          width + (event.key === grow ? RESIZE_STEP : -RESIZE_STEP)
-        )
+        const next = clampWidth(width + (event.key === grow ? RESIZE_STEP : -RESIZE_STEP))
         onResize(next)
         onCommit(next)
-      }}
-    >
-      <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors group-hover/resize:bg-ring group-data-dragging/resize:bg-ring" />
+      }}>
+      <span className="group-hover/resize:bg-ring group-data-dragging/resize:bg-ring absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors" />
     </div>
   )
 }
@@ -189,31 +184,20 @@ function SheetContent({
       <SheetPrimitive.Popup
         data-slot="sheet-content"
         data-side={side}
-        style={
-          canResize
-            ? { width: `min(${width}px, 100vw)`, maxWidth: "none", ...style }
-            : style
-        }
+        style={canResize ? { width: `min(${width}px, 100vw)`, maxWidth: "none", ...style } : style}
         className={cn(
-          "fixed z-50 flex flex-col bg-popover bg-clip-padding text-sm text-popover-foreground shadow-xl transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem] data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=right]:data-ending-style:translate-x-[2.5rem] data-[side=right]:data-starting-style:translate-x-[2.5rem] data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=top]:data-ending-style:translate-y-[-2.5rem] data-[side=top]:data-starting-style:translate-y-[-2.5rem] data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
+          "bg-popover text-popover-foreground fixed z-50 flex flex-col bg-clip-padding text-sm shadow-xl transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem] data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=right]:data-ending-style:translate-x-[2.5rem] data-[side=right]:data-starting-style:translate-x-[2.5rem] data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=top]:data-ending-style:translate-y-[-2.5rem] data-[side=top]:data-starting-style:translate-y-[-2.5rem] data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
           className
         )}
-        {...props}
-      >
+        {...props}>
         {children}
         {showCloseButton && (
           <SheetPrimitive.Close
             data-slot="sheet-close"
             render={
-              <Button
-                variant="ghost"
-                className="absolute top-4 right-4 bg-secondary"
-                size="icon-sm"
-              />
-            }
-          >
-            <XIcon
-            />
+              <Button variant="ghost" className="bg-secondary absolute top-4 right-4" size="icon-sm" />
+            }>
+            <XIcon />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>
         )}
@@ -233,22 +217,12 @@ function SheetContent({
 }
 
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="sheet-header"
-      className={cn("flex flex-col gap-1.5 p-6", className)}
-      {...props}
-    />
-  )
+  return <div data-slot="sheet-header" className={cn("flex flex-col gap-1.5 p-6", className)} {...props} />
 }
 
 function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div
-      data-slot="sheet-footer"
-      className={cn("mt-auto flex flex-col gap-2 p-6", className)}
-      {...props}
-    />
+    <div data-slot="sheet-footer" className={cn("mt-auto flex flex-col gap-2 p-6", className)} {...props} />
   )
 }
 
@@ -256,23 +230,17 @@ function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn(
-        "font-heading text-base font-medium text-foreground",
-        className
-      )}
+      className={cn("font-heading text-foreground text-base font-medium", className)}
       {...props}
     />
   )
 }
 
-function SheetDescription({
-  className,
-  ...props
-}: SheetPrimitive.Description.Props) {
+function SheetDescription({ className, ...props }: SheetPrimitive.Description.Props) {
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("text-muted-foreground text-sm", className)}
       {...props}
     />
   )

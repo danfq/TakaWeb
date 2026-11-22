@@ -1,9 +1,9 @@
-import { cn } from "cn";
-import { shortDuration } from "@/lib/stats/format";
-import type { Bucket } from "@/lib/stats/types";
+import { cn } from "cn"
+import { shortDuration } from "@/lib/stats/format"
+import type { Bucket } from "@/lib/stats/types"
 
-const MINUTE = 60;
-const HOUR = 60 * MINUTE;
+const MINUTE = 60
+const HOUR = 60 * MINUTE
 
 /**
  * round a peak up to a readable axis maximum
@@ -13,39 +13,37 @@ const HOUR = 60 * MINUTE;
  * @returns {number} axis maximum in seconds
  */
 function niceMax(seconds: number): number {
-  if (seconds <= 0) return HOUR;
+  if (seconds <= 0) return HOUR
 
   if (seconds <= HOUR) {
-    return Math.max(15, Math.ceil(seconds / MINUTE / 15) * 15) * MINUTE;
+    return Math.max(15, Math.ceil(seconds / MINUTE / 15) * 15) * MINUTE
   }
 
-  const hours = seconds / HOUR;
-  const magnitude = 10 ** Math.floor(Math.log10(hours));
-  const step = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(
-    (step) => step * magnitude >= hours,
-  );
+  const hours = seconds / HOUR
+  const magnitude = 10 ** Math.floor(Math.log10(hours))
+  const step = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((step) => step * magnitude >= hours)
 
-  return (step ?? 10) * magnitude * HOUR;
+  return (step ?? 10) * magnitude * HOUR
 }
 
 type BarChartProps = {
-  buckets: Bucket[];
+  buckets: Bucket[]
   // axis label per bucket, empty to skip
-  tick: (bucket: Bucket, index: number) => string;
+  tick: (bucket: Bucket, index: number) => string
   // bucket to emphasise, usually the current one
-  current?: number;
-  hovered: number | null;
-  onHover: (index: number | null) => void;
+  current?: number
+  hovered: number | null
+  onHover: (index: number | null) => void
   // pulse the current bar while coding
-  live?: boolean;
+  live?: boolean
   // bars become buttons when set
-  onSelect?: (index: number) => void;
+  onSelect?: (index: number) => void
   // bucket whose details are open
-  selected?: number | null;
+  selected?: number | null
   // accessible name for a selectable bar
-  describe?: (bucket: Bucket) => string;
-  className?: string;
-};
+  describe?: (bucket: Bucket) => string
+  className?: string
+}
 
 /**
  * vertical bars of coded time with a light grid
@@ -62,27 +60,23 @@ export default function BarChart({
   describe,
   className,
 }: BarChartProps) {
-  const max = niceMax(Math.max(0, ...buckets.map((bucket) => bucket.seconds)));
-  const dense = buckets.length > 20;
+  const max = niceMax(Math.max(0, ...buckets.map((bucket) => bucket.seconds)))
+  const dense = buckets.length > 20
 
   // hovering wins, then the open bucket, then the current one
-  const focus = hovered ?? selected;
+  const focus = hovered ?? selected
 
   return (
-    <div
-      className={cn("flex min-h-36 flex-col pt-2", className)}
-      onMouseLeave={() => onHover(null)}
-    >
+    <div className={cn("flex min-h-36 flex-col pt-2", className)} onMouseLeave={() => onHover(null)}>
       <div className="relative min-h-0 flex-1">
         {/* grid */}
         {[1, 0.5, 0].map((fraction) => (
           <div
             key={fraction}
-            className="absolute inset-x-0 border-t border-dashed border-border"
-            style={{ bottom: `${fraction * 100}%` }}
-          >
+            className="border-border absolute inset-x-0 border-t border-dashed"
+            style={{ bottom: `${fraction * 100}%` }}>
             {fraction > 0 && (
-              <span className="absolute -top-2 right-0 text-[10px] leading-none text-muted-foreground tabular-nums">
+              <span className="text-muted-foreground absolute -top-2 right-0 text-[10px] leading-none tabular-nums">
                 {shortDuration(max * fraction)}
               </span>
             )}
@@ -90,17 +84,12 @@ export default function BarChart({
         ))}
 
         {/* bars */}
-        <div
-          className={cn(
-            "absolute inset-0 right-9 flex items-end",
-            dense ? "gap-0.5" : "gap-1.5",
-          )}
-        >
+        <div className={cn("absolute inset-0 right-9 flex items-end", dense ? "gap-0.5" : "gap-1.5")}>
           {buckets.map((bucket, index) => {
             const bar = (
               <div
                 className={cn(
-                  "w-full rounded-t-[min(6px,30%)] bg-primary transition-[height,opacity] duration-500 ease-out",
+                  "bg-primary w-full rounded-t-[min(6px,30%)] transition-[height,opacity] duration-500 ease-out",
                   focus === null
                     ? index === current
                       ? "opacity-100"
@@ -108,14 +97,14 @@ export default function BarChart({
                     : focus === index
                       ? "opacity-100"
                       : "opacity-35",
-                  live && index === current && "animate-pulse",
+                  live && index === current && "animate-pulse"
                 )}
                 style={{
                   height: `${(bucket.seconds / max) * 100}%`,
                   minHeight: bucket.seconds > 0 ? 2 : 0,
                 }}
               />
-            );
+            )
 
             return onSelect ? (
               <button
@@ -127,19 +116,17 @@ export default function BarChart({
                 onMouseEnter={() => onHover(index)}
                 onFocus={() => onHover(index)}
                 onBlur={() => onHover(null)}
-                onClick={() => onSelect(index)}
-              >
+                onClick={() => onSelect(index)}>
                 {bar}
               </button>
             ) : (
               <div
                 key={bucket.key}
                 className="flex h-full min-w-0 flex-1 items-end"
-                onMouseEnter={() => onHover(index)}
-              >
+                onMouseEnter={() => onHover(index)}>
                 {bar}
               </div>
-            );
+            )
           })}
         </div>
       </div>
@@ -150,14 +137,13 @@ export default function BarChart({
           <span
             key={bucket.key}
             className={cn(
-              "min-w-0 flex-1 overflow-visible text-center text-[10px] whitespace-nowrap text-muted-foreground tabular-nums",
-              (index === current || index === focus) && "text-foreground",
-            )}
-          >
+              "text-muted-foreground min-w-0 flex-1 overflow-visible text-center text-[10px] whitespace-nowrap tabular-nums",
+              (index === current || index === focus) && "text-foreground"
+            )}>
             {tick(bucket, index)}
           </span>
         ))}
       </div>
     </div>
-  );
+  )
 }

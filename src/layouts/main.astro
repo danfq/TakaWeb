@@ -1,18 +1,19 @@
 ---
-import "@/styles/global.css";
-import { cn } from "cn";
-import Header from "@/components/layout/header.astro";
-import { FOCUS_SCRIPT } from "@/lib/focus";
-import { TZ_SCRIPT } from "@/lib/stats/view";
-import { THEME_SCRIPT, themeCss } from "@/lib/themes";
+import "@/styles/global.css"
+import { cn } from "cn"
+import Header from "@/components/layout/header.astro"
+import { FOCUS_SCRIPT } from "@/lib/focus"
+import { SETTINGS_SCRIPT } from "@/lib/settings"
+import { TZ_SCRIPT } from "@/lib/stats/view"
+import { THEME_SCRIPT, themeCss } from "@/lib/themes"
 
 interface Props {
-  title?: string;
+  title?: string
   // fixed viewport shell, the page renders its own header and never scrolls
-  app?: boolean;
+  app?: boolean
 }
 
-const { title, app = false } = Astro.props;
+const { title, app = false } = Astro.props
 ---
 
 <html lang="en">
@@ -25,40 +26,22 @@ const { title, app = false } = Astro.props;
     {/* theme */}
     <style is:inline set:html={themeCss()} />
     <script is:inline set:html={THEME_SCRIPT} />
-
     {/* lets the server render dates in the browser's timezone */}
     <script is:inline set:html={TZ_SCRIPT} />
-
     {/* focus outlines for keyboard navigation only */}
     <script is:inline set:html={FOCUS_SCRIPT} />
-
+    {/* settings that style the page before first paint */}
+    <script is:inline set:html={SETTINGS_SCRIPT} />
     {/* icons & fonts */}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" href="/favicon.ico" />
-    <link
-      rel="preload"
-      href="/static/fonts/figtree_variable.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-    <link
-      rel="preload"
-      href="/static/fonts/inter_variable.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
+    <link rel="preload" href="/static/fonts/figtree_variable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/static/fonts/inter_variable.woff2" as="font" type="font/woff2" crossorigin />
 
     {/* title */}
     <title>{title ? `${title} · TakaWeb` : "TakaWeb"}</title>
   </head>
-  <body
-    class={cn(
-      "flex flex-col",
-      app ? "h-svh overflow-hidden" : "min-h-svh",
-    )}
-  >
+  <body class={cn("flex flex-col", app ? "h-svh overflow-hidden" : "min-h-svh")}>
     {!app && <Header />}
     <slot />
   </body>

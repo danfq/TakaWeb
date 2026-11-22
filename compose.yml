@@ -46,7 +46,16 @@ services:
     volumes:
       - "mongo-data:/data/db"
     healthcheck:
-      test: ["CMD", "mongosh", "--port", "${MONGO_PORT:-27017}", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--port",
+          "${MONGO_PORT:-27017}",
+          "--quiet",
+          "--eval",
+          "db.adminCommand('ping').ok",
+        ]
       interval: "10s"
       timeout: "5s"
       retries: 5

@@ -2,19 +2,19 @@
  * a takatime theme palette, same fields as its ThemeConfig
  */
 export type Palette = {
-  background: string;
-  text: string;
-  subtext: string;
-  bar: string;
-  colors: [string, string, string, string];
-};
+  background: string
+  text: string
+  subtext: string
+  bar: string
+  colors: [string, string, string, string]
+}
 
 export type Theme = {
-  id: string;
-  name: string;
-  light?: boolean;
-  palette: Palette;
-};
+  id: string
+  name: string
+  light?: boolean
+  palette: Palette
+}
 
 /**
  * every takatime theme, ported from its internal/types/themes.go
@@ -230,14 +230,14 @@ export const THEMES: Theme[] = [
       colors: ["#eb6f92", "#f6c177", "#ebbcba", "#31748f"],
     },
   },
-];
+]
 
 /**
  * follows the os, picking takatime's default or light theme
  */
-export const SYSTEM_THEME = "system";
+export const SYSTEM_THEME = "system"
 
-export const THEME_STORAGE_KEY = "takaweb-theme";
+export const THEME_STORAGE_KEY = "takaweb-theme"
 
 /**
  * css variables for every theme, keyed off data-theme on the root
@@ -246,10 +246,10 @@ export const THEME_STORAGE_KEY = "takaweb-theme";
  */
 export function themeCss(): string {
   return THEMES.map(({ id, palette }) => {
-    const [c1, c2, c3, c4] = palette.colors;
+    const [c1, c2, c3, c4] = palette.colors
 
-    return `[data-theme="${id}"]{--tt-bg:${palette.background};--tt-text:${palette.text};--tt-sub:${palette.subtext};--tt-bar:${palette.bar};--tt-c1:${c1};--tt-c2:${c2};--tt-c3:${c3};--tt-c4:${c4}}`;
-  }).join("");
+    return `[data-theme="${id}"]{--tt-bg:${palette.background};--tt-text:${palette.text};--tt-sub:${palette.subtext};--tt-bar:${palette.bar};--tt-c1:${c1};--tt-c2:${c2};--tt-c3:${c3};--tt-c4:${c4}}`
+  }).join("")
 }
 
 /**
@@ -276,4 +276,4 @@ export const THEME_SCRIPT = `(() => {
   window.__takawebTheme = apply;
   media.addEventListener("change", apply);
   addEventListener("storage", (event) => event.key === ${JSON.stringify(THEME_STORAGE_KEY)} && apply());
-})();`;
+})();`
