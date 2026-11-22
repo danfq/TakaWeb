@@ -72,9 +72,8 @@ export class JsonScanner {
   // a number or literal outside a capture
   private primitive = false
 
-  // a value being captured or skipped, it ends once the stack drops back to depth
+  // a value being captured or skipped, it ends once its nesting closes
   private mode: "capture" | "skip" | null = null
-  private depth = 0
   private nested = 0
   private buffer: string[] = []
   private start = 0
@@ -134,7 +133,6 @@ export class JsonScanner {
     if (action === "descend") return false
 
     this.mode = action
-    this.depth = this.stack.length
     this.nested = 0
     this.buffer = []
     this.start = index
@@ -300,7 +298,6 @@ export class JsonScanner {
           } else {
             // a string nobody captures, skipped the same way
             this.mode = "skip"
-            this.depth = this.stack.length
             this.nested = 0
             this.scalar = true
             this.inString = true

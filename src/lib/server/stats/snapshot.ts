@@ -1,5 +1,4 @@
 import {
-  RANGES,
   type Bucket,
   type Detail,
   type Dimension,
@@ -9,11 +8,10 @@ import {
   type PeriodRange,
   type Range,
   type Session,
-  type Snapshot,
   type Summary,
   type View,
 } from "@/lib/stats/types"
-import { dayIndex, days, keyIndex, monthStart, nextShift, offsetIn, weekday, type Days } from "./days"
+import { dayIndex, days, keyIndex, monthStart, nextShift, offsetIn, type Days } from "./days"
 import type { Entry } from "./store"
 
 export const HOUR = 60 * 60 * 1000
