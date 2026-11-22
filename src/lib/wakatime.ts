@@ -26,9 +26,47 @@ export type Agents = Record<string, { editor: string; os: string; value: string 
 export const IMPORT_TIMEOUT = 15 * 60
 
 /**
- * largest batch the import sends at once
+ * most logs the import sends at once
  */
 export const IMPORT_BATCH = 2000
+
+/**
+ * most bytes one import request carries, well under astro's 1 MB action body limit
+ */
+const IMPORT_BATCH_BYTES = 512 * 1024
+
+const encoder = new TextEncoder()
+
+/**
+ * split logs into requests bounded by both count and size, long file paths fill a request sooner
+ *
+ * @param logs logs
+ *
+ * @returns {ImportLog[][]} batches, in order
+ */
+export function importBatches(logs: ImportLog[]): ImportLog[][] {
+  const batches: ImportLog[][] = []
+  let batch: ImportLog[] = []
+  let bytes = 0
+
+  for (const log of logs) {
+    // plus a comma between entries
+    const size = encoder.encode(JSON.stringify(log)).length + 1
+
+    if (batch.length && (batch.length === IMPORT_BATCH || bytes + size > IMPORT_BATCH_BYTES)) {
+      batches.push(batch)
+      batch = []
+      bytes = 0
+    }
+
+    batch.push(log)
+    bytes += size
+  }
+
+  if (batch.length) batches.push(batch)
+
+  return batches
+}
 
 /**
  * what logs get when the export cannot name their editor or os

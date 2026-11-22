@@ -46,7 +46,12 @@ const importLog = z.object({
   branch: z.string().max(512),
   editor: z.string().max(256),
   os: z.string().max(64),
-  end: z.number().int().positive(),
+  // real dates only, the dashboard formats every instant it holds
+  end: z
+    .number()
+    .int()
+    .min(Date.UTC(2000, 0, 1))
+    .refine((end) => end <= Date.now() + 86_400_000, "Log ends in the future"),
   duration: z.number().positive().max(IMPORT_TIMEOUT),
 });
 

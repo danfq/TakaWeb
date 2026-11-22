@@ -15,7 +15,7 @@ import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "@
 import { Input } from "@/components/ui/input"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Spinner } from "@/components/ui/spinner"
-import { IMPORT_BATCH, UNKNOWN, parseExport, type Agents } from "@/lib/wakatime"
+import { UNKNOWN, importBatches, parseExport, type Agents } from "@/lib/wakatime"
 
 /**
  * how long the remove button waits for its confirming click
@@ -95,10 +95,17 @@ function ImportDialog({
     if (names === "token") {
       setPhase({ state: "working", message: "Looking up editors and systems" })
 
-      const { data, error } = await actions.wakatime.agents({ token: token.trim() })
-      if (error) return setPhase({ state: "form", error: error.message })
+      try {
+        const { data, error } = await actions.wakatime.agents({ token: token.trim() })
+        if (error) return setPhase({ state: "form", error: error.message })
 
-      agents = data
+        agents = data
+      } catch {
+        return setPhase({
+          state: "form",
+          error: "Could not reach TakaWeb, check your connection and try again",
+        })
+      }
     }
 
     setPhase({ state: "working", message: "Reading export" })
@@ -119,22 +126,34 @@ function ImportDialog({
 
     let added = 0
     let skipped = 0
+    let sent = 0
 
-    for (let start = 0; start < logs.length; start += IMPORT_BATCH) {
-      setPhase({ state: "working", message: `Importing ${count(start)} of ${count(logs.length)} logs` })
+    /**
+     * back to the form after a failed batch, earlier batches stay saved
+     *
+     * @param reason what went wrong
+     */
+    const stopped = (reason: string) => {
+      onImported()
+      setPhase({
+        state: "form",
+        error: `${reason}. ${count(added)} logs were saved before it stopped, importing again picks up the rest.`,
+      })
+    }
 
-      const { data, error } = await actions.wakatime.import({ logs: logs.slice(start, start + IMPORT_BATCH) })
+    for (const batch of importBatches(logs)) {
+      setPhase({ state: "working", message: `Importing ${count(sent)} of ${count(logs.length)} logs` })
 
-      if (error) {
-        onImported()
-        return setPhase({
-          state: "form",
-          error: `${error.message}. ${count(added)} logs were saved before it stopped, importing again picks up the rest.`,
-        })
+      try {
+        const { data, error } = await actions.wakatime.import({ logs: batch })
+        if (error) return stopped(error.message)
+
+        added += data.added
+        skipped += data.skipped
+        sent += batch.length
+      } catch {
+        return stopped("Could not reach TakaWeb")
       }
-
-      added += data.added
-      skipped += data.skipped
     }
 
     const unnamed = logs.filter((log) => log.editor === UNKNOWN).length
@@ -182,7 +201,7 @@ function ImportDialog({
               <li>
                 Importing again skips what is already here, and you can remove imported time from settings.
               </li>
-              <li>Hours both WakaTime and TakaTime tracked count twice.</li>
+              <li>Time both WakaTime and TakaTime tracked only counts once.</li>
             </ul>
 
             <div className="flex min-w-0 items-center gap-3">
@@ -308,8 +327,12 @@ export default function WakatimeImport() {
    * refresh how many logs came from wakatime
    */
   const refresh = async () => {
-    const { data } = await actions.wakatime.status()
-    if (data) setImported(data.imported)
+    try {
+      const { data } = await actions.wakatime.status()
+      if (data) setImported(data.imported)
+    } catch {
+      // keeps the last known count, the next refresh tries again
+    }
   }
 
   useEffect(() => {
@@ -333,11 +356,16 @@ export default function WakatimeImport() {
     setConfirming(false)
     setRemoving(true)
 
-    const { data, error } = await actions.wakatime.remove()
-
-    setRemoving(false)
-    setNotice(error ? error.message : `Removed ${count(data.removed)} logs`)
-    refresh()
+    try {
+      const { data, error } = await actions.wakatime.remove()
+      setNotice(error ? error.message : `Removed ${count(data.removed)} logs`)
+    } catch {
+      setNotice("Could not reach TakaWeb, the logs may not have been removed")
+    } finally {
+      setRemoving(false)
+      // the outcome may be unknown, so read back what is actually left
+      refresh()
+    }
   }
 
   return (
