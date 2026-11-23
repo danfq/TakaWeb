@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+    # release commits only bump the version, the release workflow checks them
+    paths-ignore: [package.json]
   pull_request:
   # the release workflow runs this first
   workflow_call:
