@@ -22,7 +22,10 @@ function run(stored: Record<string, string>, prefersLight: boolean) {
 
   new Function("document", "localStorage", "matchMedia", "window", "addEventListener", THEME_SCRIPT)(
     { documentElement: root },
-    { getItem: (key: string) => stored[key] ?? null },
+    {
+      getItem: (key: string) => stored[key] ?? null,
+      setItem: (key: string, value: string) => (stored[key] = value),
+    },
     () => ({ matches: prefersLight, addEventListener: () => {} }),
     {},
     () => {}
@@ -49,10 +52,42 @@ test("system mode uses the chosen theme for each scheme", () => {
   expect(run(stored, false).dataset.theme).toBe("nord")
 })
 
-test("a fixed theme ignores the scheme choices", () => {
-  const stored = { [THEME_STORAGE_KEY]: "dracula", [SCHEME_THEMES.light.key]: "light" }
+test("a forced scheme ignores the os", () => {
+  const stored = {
+    [THEME_STORAGE_KEY]: "dark",
+    [SCHEME_THEMES.light.key]: "solarized",
+    [SCHEME_THEMES.dark.key]: "dracula",
+  }
 
-  expect(run(stored, true).dataset).toMatchObject({ theme: "dracula", themePreference: "dracula" })
+  expect(run(stored, true)).toMatchObject({
+    dataset: { theme: "dracula", themePreference: "dark" },
+    dark: true,
+  })
+  expect(run({ ...stored, [THEME_STORAGE_KEY]: "light" }, false).dataset).toMatchObject({
+    theme: "solarized",
+    themePreference: "light",
+  })
+})
+
+test("a legacy fixed theme becomes its scheme's theme", () => {
+  const stored: Record<string, string> = { [THEME_STORAGE_KEY]: "dracula", [SCHEME_THEMES.dark.key]: "nord" }
+
+  expect(run(stored, true).dataset).toMatchObject({
+    theme: "dracula",
+    themePreference: "dark",
+    themeDark: "dracula",
+  })
+  expect(stored).toMatchObject({ [THEME_STORAGE_KEY]: "dark", [SCHEME_THEMES.dark.key]: "dracula" })
+})
+
+test("the light mode keeps its chosen theme", () => {
+  const stored: Record<string, string> = {
+    [THEME_STORAGE_KEY]: "light",
+    [SCHEME_THEMES.light.key]: "solarized",
+  }
+
+  expect(run(stored, false).dataset).toMatchObject({ theme: "solarized", themePreference: "light" })
+  expect(stored[SCHEME_THEMES.light.key]).toBe("solarized")
 })
 
 test("unknown stored ids fall back", () => {
