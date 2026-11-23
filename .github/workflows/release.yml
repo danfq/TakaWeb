@@ -1,11 +1,12 @@
 name: Release
 
-# releases on demand: bumps the version from conventional commits, tags it and publishes the image
+# bun release pushes a version tag on main, this checks it, publishes the release and the image
 on:
-  workflow_dispatch:
+  push:
+    tags: ["v*"]
 
 concurrency:
-  group: release
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -14,62 +15,49 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   release:
-    name: Version and tag
+    name: GitHub release
     needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    outputs:
-      skip: ${{ steps.version.outputs.skip }}
-      tag: ${{ steps.version.outputs.tag }}
-      version: ${{ steps.version.outputs.version }}
     steps:
-      # every tag and commit, the version is computed from all commits since the last tag
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Compute version and notes
-        id: version
-        run: bunx nextver --skip-empty
-
-      - name: Commit and tag release
-        if: steps.version.outputs.skip == 'false'
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
+      - name: Check the tag is on main
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore(release): $TAG"
-          git tag -a "$TAG" -m "$TAG"
-          git push origin "HEAD:${{ github.ref_name }}" --follow-tags
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is not on main, releases are only cut from main"
+            exit 1
+          fi
+
+      # the annotated tag carries the notes nextver wrote, checkout may leave a lightweight copy
+      - name: Read release notes from the tag
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git tag --list --format='%(contents:body)' "$GITHUB_REF_NAME" > RELEASE_NOTES.md
 
       - name: Create GitHub release
-        if: steps.version.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.version.outputs.tag }}
-        run: gh release create "$TAG" --title "$TAG" --notes-file RELEASE_NOTES.md --generate-notes
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file RELEASE_NOTES.md \
+            --generate-notes \
+            --verify-tag
 
   image:
     name: Publish image
     needs: release
-    if: needs.release.outputs.skip == 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ needs.release.outputs.tag }}
 
       - uses: docker/setup-qemu-action@v3
 
@@ -87,8 +75,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/takaweb
           tags: |
-            type=semver,pattern={{version}},value=${{ needs.release.outputs.tag }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release.outputs.tag }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
       - name: Build and push

@@ -27,5 +27,3 @@ pnpm-debug.log*
 # jetbrains setting folder
 .idea/
 
-# release notes written by nextver during a release
-RELEASE_NOTES.md

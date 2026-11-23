@@ -20,7 +20,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "astro": "astro",
-    "takaweb": "bun scripts/takaweb.ts"
+    "takaweb": "bun scripts/takaweb.ts",
+    "release": "bun scripts/release.ts"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.14",
