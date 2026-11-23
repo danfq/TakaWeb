@@ -22,7 +22,10 @@ function run(stored: Record<string, string>, prefersLight: boolean) {
 
   new Function("document", "localStorage", "matchMedia", "window", "addEventListener", THEME_SCRIPT)(
     { documentElement: root },
-    { getItem: (key: string) => stored[key] ?? null },
+    {
+      getItem: (key: string) => stored[key] ?? null,
+      setItem: (key: string, value: string) => (stored[key] = value),
+    },
     () => ({ matches: prefersLight, addEventListener: () => {} }),
     {},
     () => {}
