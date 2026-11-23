@@ -6,8 +6,10 @@ export default getViteConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     environment: "node",
-    // every file gets its own data dir, see tests/setup.ts
+    // every file starts with fresh modules and an empty database, see tests/setup.ts
     setupFiles: ["tests/setup.ts"],
     restoreMocks: true,
+    // reuses workers across files instead of one per file
+    isolate: false,
   },
 })
