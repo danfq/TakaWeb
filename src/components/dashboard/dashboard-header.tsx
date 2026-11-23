@@ -124,20 +124,22 @@ export default function DashboardHeader({
   const FilterIcon = filter ? FILTER_ICONS[filter.dimension] : null
 
   // mobile stacks brand and actions over status and range, with the filter below them,
-  // wider screens use one row with status and range centered between equal sides
+  // wider screens use one row with status and range centered between equal sides,
+  // the sides never go below brand and actions so only the status gives way when space runs out
   return (
-    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 pt-4 pb-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-4 lg:px-6 lg:pt-5 lg:pb-4">
+    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 pt-4 pb-3 sm:grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] sm:gap-4 lg:px-6 lg:pt-5 lg:pb-4">
       <div className="flex min-w-0 items-center gap-4 max-sm:contents">
-        <div className="max-sm:col-start-1 max-sm:row-start-1">
+        <div className="shrink-0 max-sm:col-start-1 max-sm:row-start-1">
           <Brand />
         </div>
 
         {filter && FilterIcon && (
-          <div className="flex min-w-0 max-sm:col-span-2 max-sm:row-start-3">
+          // zero basis keeps the chip text out of the side's minimum, only icon and clear stay reserved
+          <div className="flex min-w-0 max-sm:col-span-2 max-sm:row-start-3 sm:w-0 sm:min-w-20 sm:flex-1">
             <Button
               variant="secondary"
               size="sm"
-              className="min-w-0"
+              className="min-w-0 shrink"
               title="Clear filter"
               onClick={() => onFilter(null)}>
               <FilterIcon />
@@ -150,9 +152,9 @@ export default function DashboardHeader({
         )}
       </div>
 
-      <div className="flex min-w-0 items-center gap-2 justify-self-center max-sm:contents">
-        {/* capped so a long project name cannot squeeze the sides */}
-        <div className="flex min-w-0 max-sm:col-start-1 max-sm:row-start-2 sm:max-w-xs">
+      <div className="flex min-w-0 items-center justify-center gap-2 max-sm:contents">
+        {/* capped so a long project name does not take the whole row, shrinks down to the dot */}
+        <div className="flex min-w-10 max-sm:col-start-1 max-sm:row-start-2 sm:max-w-xs">
           <LiveIndicator {...live} />
         </div>
 
