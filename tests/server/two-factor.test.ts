@@ -90,6 +90,17 @@ describe("enrollment", () => {
     expect(finishEnrollment("session", userId, codeFor(secret))).toBe("expired")
     expect(hasTotp(userId)).toBe(false)
   })
+
+  test("never replaces a secret that is already on", () => {
+    const first = startEnrollment("session", userId)
+    const second = startEnrollment("other", userId)
+
+    expect(finishEnrollment("session", userId, codeFor(first.secret))).toBe("ok")
+    expect(finishEnrollment("other", userId, codeFor(second.secret, 1))).toBe("enabled")
+
+    // the first secret still signs in
+    expect(checkTotp(userId, codeFor(first.secret, 1))).toBe(true)
+  })
 })
 
 describe("codes", () => {

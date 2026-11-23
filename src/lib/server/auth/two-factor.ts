@@ -143,13 +143,13 @@ export function startEnrollment(sessionId: string, userId: number): { secret: st
  * @param userId user id
  * @param code code from the app
  *
- * @returns {"ok" | "expired" | "invalid"} outcome
+ * @returns {"ok" | "expired" | "invalid" | "enabled"} outcome, enabled when two-factor was already on
  */
 export function finishEnrollment(
   sessionId: string,
   userId: number,
   code: string
-): "ok" | "expired" | "invalid" {
+): "ok" | "expired" | "invalid" | "enabled" {
   const enrollment = state.enrollments.get(sessionId)
 
   if (!enrollment || enrollment.userId !== userId || Date.now() >= enrollment.expiresAt) {
@@ -160,14 +160,13 @@ export function finishEnrollment(
   const step = verifyTotp(enrollment.secret, code)
   if (step === null) return "invalid"
 
-  db.prepare("UPDATE user SET totp_secret = ?, totp_step = ? WHERE id = ?").run(
-    enrollment.secret,
-    step,
-    userId
-  )
+  // never replace a secret that is already on, overlapping setups lose here
+  const { changes } = db
+    .prepare("UPDATE user SET totp_secret = ?, totp_step = ? WHERE id = ? AND totp_secret IS NULL")
+    .run(enrollment.secret, step, userId)
   state.enrollments.delete(sessionId)
 
-  return "ok"
+  return changes > 0 ? "ok" : "enabled"
 }
 
 /**

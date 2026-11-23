@@ -425,11 +425,12 @@ export const server = {
       handler: async (input, context) => {
         const { user, session } = assertUser(context)
 
+        await assertPassword(context, user, session, input.password)
+
+        // checked after the password, so a setup that finished meanwhile counts
         if (hasTotp(user.id)) {
           throw new ActionError({ code: "CONFLICT", message: "Two-factor authentication is already on" })
         }
-
-        await assertPassword(context, user, session, input.password)
 
         return startEnrollment(session.id, user.id)
       },
@@ -454,6 +455,10 @@ export const server = {
             code: "PRECONDITION_FAILED",
             message: "Setup timed out, start over",
           })
+        }
+
+        if (outcome === "enabled") {
+          throw new ActionError({ code: "CONFLICT", message: "Two-factor authentication is already on" })
         }
 
         if (outcome === "invalid") {
