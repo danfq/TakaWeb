@@ -17,6 +17,8 @@ export type Account = {
   sessions: SessionInfo[]
   // heartbeats imported from wakatime
   imported: number
+  // whether signing in takes a code from an authenticator app
+  twoFactor: boolean
 }
 
 /**
