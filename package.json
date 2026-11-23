@@ -2,6 +2,7 @@
   "name": "takaweb",
   "type": "module",
   "version": "1.0.0",
+  "license": "AGPL-3.0-only",
   "author": {
     "name": "DanFQ",
     "email": "dan@danfq.dev",
