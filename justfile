@@ -29,8 +29,33 @@ env:
 
 # start backing services (mongo), wait until healthy, set up the replica set and sync the read-only user
 up: env
-    docker compose up -d --wait mongo
-    docker compose run --rm mongo-init
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # reload .env in case it was just created by env
+    set -a; source .env; set +a
+    port="${MONGO_PORT:-27017}"
+    host="${MONGO_PUBLIC_HOST:-127.0.0.1}:${port}"
+    id="$(docker compose ps --status running -q mongo)"
+    if [ -n "$id" ] && [ "$(docker inspect -f '{{{{.State.Health.Status}}' "$id")" = "healthy" ]; then
+        echo "mongo already running, skipping"
+    else
+        # anything else on the port would make compose fail with a vague bind error
+        if [ -z "$id" ] && (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null; then
+            owner="$(docker ps --filter "publish=${port}" --format '{{{{.Names}}' | head -n1)"
+            echo "port ${port} is already in use${owner:+ by container ${owner}}, stop it or set MONGO_PORT in .env" >&2
+            exit 1
+        fi
+        docker compose up -d --wait mongo
+    fi
+    # init is done once the read-only user can sign in, holds its role and the member sits at the public address
+    check='const h = db.hello();
+    const roles = db.runCommand({ connectionStatus: 1 }).authInfo.authenticatedUserRoles;
+    print(h.setName === "rs0" && h.me === "'"${host}"'" && h.isWritablePrimary && roles.some((r) => r.role === "read" && r.db === "takatime"));'
+    if [ "$(docker compose exec -T mongo mongosh --port "$port" -u "${MONGO_READONLY_USERNAME:-takaweb}" -p "$MONGO_READONLY_PASSWORD" --authenticationDatabase admin --quiet --eval "$check" 2>/dev/null)" = "true" ]; then
+        echo "mongo already initialized, skipping"
+    else
+        docker compose run --rm mongo-init
+    fi
 
 # stop the compose stack
 down:
