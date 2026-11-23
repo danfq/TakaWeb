@@ -4,6 +4,16 @@ import type { Filter } from "@/lib/stats/types"
 import { sameFilter, writeFilter } from "@/lib/stats/view"
 
 /**
+ * tries at sealing a filter before the address bar is left without it
+ */
+const SEAL_ATTEMPTS = 3
+
+/**
+ * wait between sealing tries, grows with each one
+ */
+const SEAL_BACKOFF = 1_000
+
+/**
  * put a filter in the address bar without adding to history
  *
  * @param filter filter or null
@@ -14,6 +24,30 @@ function show(filter: Filter | null, sealed?: string) {
   writeFilter(url.searchParams, filter, sealed)
 
   history.replaceState(history.state, "", url)
+}
+
+/**
+ * seal a filter, retrying a few times when the server fails or sends nothing back
+ *
+ * @param filter filter to seal
+ * @param cancelled whether the result is no longer wanted
+ *
+ * @returns {Promise<string | null>} sealed token, null when every try failed or it was cancelled
+ */
+async function seal(filter: Filter, cancelled: () => boolean): Promise<string | null> {
+  for (let attempt = 0; attempt < SEAL_ATTEMPTS; attempt++) {
+    if (attempt) await new Promise((resolve) => setTimeout(resolve, attempt * SEAL_BACKOFF))
+    if (cancelled()) return null
+
+    try {
+      const { data } = await actions.view.seal(filter)
+      if (data) return data
+    } catch {
+      // network error, try again
+    }
+  }
+
+  return null
 }
 
 /**
@@ -44,15 +78,13 @@ export function useFilterUrl(filter: Filter | null, hidden: boolean, initial: Fi
 
     let cancelled = false
 
-    actions.view
-      .seal(filter)
-      .then(({ data }) => {
-        if (cancelled || !data) return
+    void seal(filter, () => cancelled).then((token) => {
+      // the plain filter stays out of the url even when sealing never succeeds
+      if (cancelled || !token) return
 
-        show(filter, data)
-        shown.current = { filter, sealed: true }
-      })
-      .catch(() => {})
+      show(filter, token)
+      shown.current = { filter, sealed: true }
+    })
 
     return () => {
       cancelled = true
