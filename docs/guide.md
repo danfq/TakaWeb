@@ -206,6 +206,7 @@ just dev     # start MongoDB and the dev server
 | `bun run test`    | Run the test suite                                 |
 | `bun run fmt`     | Format everything with Prettier                    |
 | `bun run takaweb` | Run the maintenance CLI from source                |
+| `bun release`     | Cut a release, see [Releasing](#releasing)         |
 
 The dev server has no Content Security Policy, Astro only applies it to builds. To try a production build locally, run `bun run build`, then `node dist/server/entry.mjs`.
 
@@ -228,7 +229,20 @@ Tests run with Vitest against Astro's own Vite config. Each test file gets a fre
 
 ## Releasing
 
-Releases are cut by hand from GitHub: **Actions → Release → Run workflow**. It runs CI, then [`@danfq/nextver`](https://www.npmjs.com/package/@danfq/nextver) picks the next version from the Conventional Commits since the last tag and writes the release notes. The workflow commits the new version, tags it, publishes a GitHub release and pushes a multi-arch image to `ghcr.io/danfq/takaweb`, tagged with the version and `latest`.
+Cut a release from a clean `main` with:
+
+```sh
+bun release
+```
+
+It walks you through it:
+
+1. Checks that your `main` matches GitHub's, and offers to push, pull or rebase when they differ.
+2. Runs [`@danfq/nextver`](https://www.npmjs.com/package/@danfq/nextver), which picks the next version from the Conventional Commits since the last release and writes the release notes.
+3. Shows the new version and its notes, and asks before going on.
+4. Commits the version as `chore: release vX.Y.Z`, tags it with the notes, and pushes both together.
+
+The tag starts the **Release** workflow on GitHub. It checks the tag is on `main`, runs CI, publishes a GitHub release with the notes, and pushes a multi-arch image to `ghcr.io/danfq/takaweb`, tagged with the version and `latest`.
 
 ## Languages
 
