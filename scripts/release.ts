@@ -53,6 +53,9 @@ function fail(message: string): never {
 const prompt = createInterface({ input: stdin, output: stdout })
 const answers = prompt[Symbol.asyncIterator]()
 
+let closed = false
+prompt.once("close", () => (closed = true))
+
 /**
  * ask a yes or no question, no unless answered yes
  *
@@ -77,6 +80,36 @@ function writeVersion(version: string) {
   const manifest = JSON.parse(readFileSync("package.json", "utf8"))
 
   writeFileSync("package.json", `${JSON.stringify({ ...manifest, version }, null, 2)}\n`)
+}
+
+/**
+ * let the user edit the release notes in git's editor
+ *
+ * @param notes generated notes
+ * @param dir temporary directory for the file
+ *
+ * @returns {string} edited notes
+ */
+function editNotes(notes: string, dir: string): string {
+  const file = join(dir, "notes.md")
+  writeFileSync(file, notes)
+
+  // the editor needs the terminal to itself, piped answers may have closed the reader already
+  if (!closed) prompt.pause()
+
+  try {
+    // run through a shell like git does, the editor may carry its own arguments
+    execFileSync("sh", ["-c", `${git("var", "GIT_EDITOR")} "$1"`, "sh", file], { stdio: "inherit" })
+  } catch {
+    fail("the editor exited with an error, nothing was changed")
+  } finally {
+    if (!closed) prompt.resume()
+  }
+
+  const edited = readFileSync(file, "utf8").trim()
+  if (!edited) fail("the release notes are empty, nothing was changed")
+
+  return `${edited}\n`
 }
 
 /**
@@ -160,12 +193,18 @@ async function cut() {
     const first = result.previous === null
     const version = first ? FIRST_VERSION : result.version
     const tag = `v${version}`
-    const notes = renderNotes(changes(result.previous))
+    let notes = renderNotes(changes(result.previous))
 
     console.log(
       `\n${result.current} -> ${version} (${first ? "first release" : result.bump}, ${result.commits} commits)\n`
     )
     console.log(notes)
+
+    // squashed pull requests can carry titles that read badly in the notes
+    if (await confirm("Edit the release notes first?")) {
+      notes = editNotes(notes, dir)
+      console.log(`\n${notes}`)
+    }
 
     if (!(await confirm(`Release ${tag}?`))) fail("cancelled, nothing was changed")
 
