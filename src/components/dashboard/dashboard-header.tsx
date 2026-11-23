@@ -123,8 +123,8 @@ export default function DashboardHeader({
 }: DashboardHeaderProps) {
   const FilterIcon = filter ? FILTER_ICONS[filter.dimension] : null
 
-  // mobile stacks brand and actions over status and range,
-  // wider screens use one row with the range centered between equal sides
+  // mobile stacks brand and actions over status and range, with the filter below them,
+  // wider screens use one row with status and range centered between equal sides
   return (
     <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 pt-4 pb-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-4 lg:px-6 lg:pt-5 lg:pb-4">
       <div className="flex min-w-0 items-center gap-4 max-sm:contents">
@@ -132,10 +132,8 @@ export default function DashboardHeader({
           <Brand />
         </div>
 
-        <div className="flex min-w-0 items-center gap-2 max-sm:col-start-1 max-sm:row-start-2">
-          <LiveIndicator {...live} />
-
-          {filter && FilterIcon && (
+        {filter && FilterIcon && (
+          <div className="flex min-w-0 max-sm:col-span-2 max-sm:row-start-3">
             <Button
               variant="secondary"
               size="sm"
@@ -148,27 +146,34 @@ export default function DashboardHeader({
               </span>
               {pending ? <Spinner /> : <X className="opacity-60" />}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      <ToggleGroup
-        aria-label="Range"
-        spacing={0}
-        className="bg-muted shrink-0 justify-self-center rounded-full p-1 max-sm:col-start-2 max-sm:row-start-2"
-        value={[range]}
-        onValueChange={(value) => value[0] && onRange(value[0] as Range)}>
-        {RANGE_OPTIONS.map((option) => (
-          <ToggleGroupItem
-            key={option.value}
-            value={option.value}
-            aria-label={option.label}
-            className="text-muted-foreground aria-pressed:bg-background aria-pressed:text-foreground dark:aria-pressed:bg-input/40 h-7! min-w-0 rounded-full! px-2.5! text-xs aria-pressed:shadow-sm">
-            <span className="lg:hidden">{option.short}</span>
-            <span className="hidden lg:inline">{option.label}</span>
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+      <div className="flex min-w-0 items-center gap-2 justify-self-center max-sm:contents">
+        {/* capped so a long project name cannot squeeze the sides */}
+        <div className="flex min-w-0 max-sm:col-start-1 max-sm:row-start-2 sm:max-w-xs">
+          <LiveIndicator {...live} />
+        </div>
+
+        <ToggleGroup
+          aria-label="Range"
+          spacing={0}
+          className="bg-muted shrink-0 rounded-full p-1 max-sm:col-start-2 max-sm:row-start-2 max-sm:justify-self-center"
+          value={[range]}
+          onValueChange={(value) => value[0] && onRange(value[0] as Range)}>
+          {RANGE_OPTIONS.map((option) => (
+            <ToggleGroupItem
+              key={option.value}
+              value={option.value}
+              aria-label={option.label}
+              className="text-muted-foreground aria-pressed:bg-background aria-pressed:text-foreground dark:aria-pressed:bg-input/40 h-7! min-w-0 rounded-full! px-2.5! text-xs aria-pressed:shadow-sm">
+              <span className="lg:hidden">{option.short}</span>
+              <span className="hidden lg:inline">{option.label}</span>
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
 
       <div className="flex items-center gap-1 justify-self-end max-sm:col-start-2 max-sm:row-start-1">
         <ThemePicker />
