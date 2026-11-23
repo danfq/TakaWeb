@@ -92,6 +92,7 @@ function workflowUrl(): string | null {
 
 /**
  * bring local main and the remote in line, asking before anything changes
+ * local commits are pushed with the release, so one push starts one workflow
  */
 async function sync() {
   if (git("rev-parse", "--abbrev-ref", "HEAD") !== BRANCH) fail(`switch to ${BRANCH} first`)
@@ -110,10 +111,9 @@ async function sync() {
   }
 
   if (ahead && !behind) {
-    if (!(await confirm(`${BRANCH} is ${ahead} commit(s) ahead of ${upstream}. Push them?`)))
+    if (!(await confirm(`${BRANCH} is ${ahead} commit(s) ahead of ${upstream}. Push them with the release?`)))
       fail("cancelled")
 
-    gitLoud("push", REMOTE, BRANCH)
     return
   }
 
@@ -124,7 +124,11 @@ async function sync() {
     return
   }
 
-  if (!(await confirm(`${BRANCH} and ${upstream} diverged. Rebase onto ${upstream} and push?`)))
+  if (
+    !(await confirm(
+      `${BRANCH} and ${upstream} diverged. Rebase onto ${upstream} and push your commits with the release?`
+    ))
+  )
     fail("cancelled")
 
   try {
@@ -133,8 +137,6 @@ async function sync() {
     git("rebase", "--abort")
     fail("the rebase hit conflicts and was aborted, resolve it by hand")
   }
-
-  gitLoud("push", REMOTE, BRANCH)
 }
 
 /**
