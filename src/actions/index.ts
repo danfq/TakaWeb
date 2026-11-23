@@ -28,10 +28,12 @@ import {
 import { clientIp, userAgent } from "@/lib/server/client"
 import { importedCount, removeImported } from "@/lib/server/imports"
 import { limits, type Limiter } from "@/lib/server/limiter"
+import { sealFilter } from "@/lib/server/seal"
 import { resetSettings, updateSettings } from "@/lib/server/settings"
 import { importsChanged } from "@/lib/server/stats/store"
 import { LookupError, lookupAgents } from "@/lib/server/wakatime"
 import { CHOICES } from "@/lib/settings"
+import { FILTERABLE } from "@/lib/stats/types"
 
 /**
  * password policy, capped to keep hashing cheap
@@ -495,6 +497,24 @@ export const server = {
 
         disableTotp(user.id)
         console.log("[takaweb] two-factor authentication turned off")
+      },
+    }),
+  },
+
+  view: {
+    /**
+     * seal a filter for the address bar, so hidden names never show in it
+     */
+    seal: defineAction({
+      input: z.object({
+        dimension: z.enum(FILTERABLE),
+        value: z.string().max(512),
+      }),
+      handler: (input, context) => {
+        const { session } = assertUser(context)
+        assertNotLimited(limits.requests, session.id, true)
+
+        return sealFilter(input)
       },
     }),
   },

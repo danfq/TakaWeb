@@ -91,8 +91,8 @@ const SETTINGS_OPTIONS: {
   {
     id: "hideNames",
     section: "Dashboard",
-    title: "Hide names",
-    description: "Blur names for screen sharing.",
+    title: "Hide private details",
+    description: "Blur names and IP addresses, and keep them out of the URL.",
   },
 ]
 

@@ -9,6 +9,11 @@ export const RANGE_COOKIE = "takaweb_range"
 export const DEFAULT_RANGE: Range = "week"
 
 /**
+ * where a sealed filter sits in the url, used instead of the plain one while names are hidden
+ */
+export const SEALED_PARAM = "filter"
+
+/**
  * range names, short ones for tight spaces
  */
 export const RANGE_OPTIONS: { value: Range; label: string; short: string }[] = [
@@ -63,8 +68,33 @@ export function readFilter(params: URLSearchParams): Filter | null {
  *
  * @param params query string
  * @param filter filter or null
+ * @param sealed sealed token to write instead of the plain filter, while names are hidden
  */
-export function writeFilter(params: URLSearchParams, filter: Filter | null) {
+export function writeFilter(params: URLSearchParams, filter: Filter | null, sealed?: string) {
   for (const dimension of FILTERABLE) params.delete(dimension)
-  if (filter) params.set(filter.dimension, filter.value)
+  params.delete(SEALED_PARAM)
+
+  if (filter && sealed) params.set(SEALED_PARAM, sealed)
+  else if (filter) params.set(filter.dimension, filter.value)
 }
+
+/**
+ * whether two filters narrow down to the same logs
+ *
+ * @param a first filter
+ * @param b second filter
+ *
+ * @returns {boolean} whether they match
+ */
+export const sameFilter = (a: Filter | null, b: Filter | null): boolean =>
+  a?.dimension === b?.dimension && a?.value === b?.value
+
+/**
+ * whether a query string names a filter in plain text
+ *
+ * @param params query string
+ *
+ * @returns {boolean} whether any filter dimension is set
+ */
+export const hasPlainFilter = (params: URLSearchParams): boolean =>
+  FILTERABLE.some((dimension) => params.has(dimension))
