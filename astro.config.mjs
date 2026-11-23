@@ -1,31 +1,46 @@
 import { defineConfig, envField } from "astro/config"
 import react from "@astrojs/react"
-
 import tailwindcss from "@tailwindcss/vite"
-
 import node from "@astrojs/node"
-
 import boot from "./src/integrations/boot"
+import pkg from "./package.json" with { type: "json" }
+
+/**
+ * small module for app package info access
+ * from within the app itself
+ */
+const app = () => {
+  const id = "virtual:app"
+  const resolved = "\0" + id
+  const data = {
+    name: pkg.name,
+    version: pkg.version,
+    license: pkg.license,
+    author: pkg.author.name,
+    url: pkg.author.url,
+  }
+
+  return {
+    name: "takaweb-app",
+    resolveId: (source) => (source === id ? resolved : undefined),
+    load: (source) => (source === resolved ? `export default ${JSON.stringify(data)}` : undefined),
+  }
+}
 
 // https://astro.build/config
 export default defineConfig({
   output: "server",
-
   integrations: [react(), boot()],
-
   vite: {
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss(), app()],
   },
-
   adapter: node({
     mode: "standalone",
   }),
-
   // no markdown here, and shiki's inline styles would need the policy below loosened
   markdown: {
     syntaxHighlight: false,
   },
-
   security: {
     // a policy with hashes of every script and style astro renders, only applied to builds
     // the middleware adds frame-ancestors and the other security headers
@@ -50,7 +65,6 @@ export default defineConfig({
       },
     },
   },
-
   env: {
     schema: {
       // read at runtime so compose can override them

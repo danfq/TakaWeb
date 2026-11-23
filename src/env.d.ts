@@ -4,3 +4,14 @@ declare namespace App {
     session: import("@/lib/server/auth/session").Session | null
   }
 }
+
+declare module "virtual:app" {
+  const app: {
+    name: string
+    version: string
+    license: string
+    author: string
+    url: string
+  }
+  export default app
+}
