@@ -12,7 +12,23 @@ export type Kind = "breaking" | "feature" | "other"
 /**
  * a commit in a release
  */
-export type Change = { hash: string; subject: string; kind: Kind }
+export type Change = {
+  sha: string
+  hash: string
+  subject: string
+  kind: Kind
+  author: { name: string; email: string }
+}
+
+/**
+ * what linking commits and authors on github needs
+ */
+export type Links = {
+  // e.g. https://github.com/danfq/TakaWeb
+  repository: string
+  // github username per author email, null when the email belongs to no account
+  logins: Map<string, string | null>
+}
 
 /**
  * sections in the order they show, empty ones are left out
@@ -50,33 +66,62 @@ export function classify(subject: string, body: string): Kind {
  */
 export function changes(since: string | null, until = "HEAD"): Change[] {
   const range = since ? `${since}..${until}` : until
-  const log = execFileSync("git", ["log", range, "--reverse", "--no-merges", "--format=%h%x1f%s%x1f%b%x1e"], {
-    encoding: "utf8",
-  })
+  const log = execFileSync(
+    "git",
+    ["log", range, "--reverse", "--no-merges", "--format=%H%x1f%h%x1f%s%x1f%an%x1f%ae%x1f%b%x1e"],
+    { encoding: "utf8" }
+  )
 
   return log
     .split("\x1e")
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((entry) => {
-      const [hash = "", subject = "", body = ""] = entry.split("\x1f")
+      const [sha = "", hash = "", subject = "", name = "", email = "", body = ""] = entry.split("\x1f")
 
-      return { hash, subject, kind: classify(subject, body) }
+      return { sha, hash, subject, kind: classify(subject, body), author: { name, email } }
     })
 }
 
 /**
+ * the github username in a noreply address, such as 12345+danfq@users.noreply.github.com
+ *
+ * @param email author email
+ *
+ * @returns {string | null} username
+ */
+export const noreplyLogin = (email: string): string | null =>
+  /^(?:\d+\+)?([\w-]+)@users\.noreply\.github\.com$/i.exec(email)?.[1] ?? null
+
+/**
+ * one line of the notes, with the commit and its author linked when links are given
+ *
+ * @param change commit
+ * @param links where commits and authors live on github
+ *
+ * @returns {string} markdown line
+ */
+function line(change: Change, links?: Links): string {
+  if (!links) return `- ${change.subject} (${change.hash})`
+
+  const login = links.logins.get(change.author.email)
+  const author = login ? `[@${login}](https://github.com/${login})` : change.author.name
+
+  return `- ${change.subject} ([${change.hash}](${links.repository}/commit/${change.sha})) by ${author}`
+}
+
+/**
  * release notes in markdown, one line per commit with its full subject and short hash
+ * plain for the terminal and the tag, linked to commits and authors for github
  *
  * @param list changes in the release
+ * @param links where commits and authors live on github
  *
  * @returns {string} notes
  */
-export function renderNotes(list: Change[]): string {
+export function renderNotes(list: Change[], links?: Links): string {
   return `${SECTIONS.map(([kind, title]) => {
-    const lines = list
-      .filter((change) => change.kind === kind)
-      .map((change) => `- ${change.subject} (${change.hash})`)
+    const lines = list.filter((change) => change.kind === kind).map((change) => line(change, links))
 
     return lines.length ? `## ${title}\n\n${lines.join("\n")}` : ""
   })

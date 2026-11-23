@@ -33,12 +33,15 @@ jobs:
             exit 1
           fi
 
-      # the annotated tag carries the notes bun release wrote, checkout may leave a lightweight copy
-      # subject and body leave out the signature of signed tags
-      - name: Read release notes from the tag
-        run: |
-          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
-          git tag --list --format='%(contents:subject)%0a%0a%(contents:body)' "$GITHUB_REF_NAME" > RELEASE_NOTES.md
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # the tag holds plain notes, these link every commit and its author on github
+      - name: Write release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun scripts/release-notes.ts "$GITHUB_REF_NAME" > RELEASE_NOTES.md
 
       - name: Create GitHub release
         env:
