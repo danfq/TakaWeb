@@ -238,7 +238,7 @@ bun release
 It walks you through it:
 
 1. Checks that your `main` matches GitHub's, and offers to push, pull or rebase when they differ.
-2. Runs [`@danfq/nextver`](https://www.npmjs.com/package/@danfq/nextver), which picks the next version from the Conventional Commits since the last release and writes the release notes.
+2. Runs [`@danfq/nextver`](https://www.npmjs.com/package/@danfq/nextver), which picks the next version from the Conventional Commits since the last release and writes the release notes. The very first release is 1.0.0.
 3. Shows the new version and its notes, and asks before going on.
 4. Commits the version as `chore: release vX.Y.Z`, tags it with the notes, and pushes both together.
 
