@@ -233,11 +233,21 @@ export const THEMES: Theme[] = [
 ]
 
 /**
- * follows the os, picking takatime's default or light theme
+ * follows the os, picking the chosen light or dark theme
  */
 export const SYSTEM_THEME = "system"
 
 export const THEME_STORAGE_KEY = "takaweb-theme"
+
+/**
+ * the themes system mode uses for each os scheme
+ */
+export const SCHEME_THEMES = {
+  light: { key: "takaweb-theme-light", fallback: "light" },
+  dark: { key: "takaweb-theme-dark", fallback: "default" },
+} as const
+
+export type Scheme = keyof typeof SCHEME_THEMES
 
 /**
  * css variables for every theme, keyed off data-theme on the root
@@ -261,19 +271,27 @@ export const THEME_SCRIPT = `(() => {
   const known = ${JSON.stringify(THEMES.map((theme) => theme.id))};
   const media = matchMedia("(prefers-color-scheme: light)");
   const root = document.documentElement;
+  const keys = ${JSON.stringify([THEME_STORAGE_KEY, ...Object.values(SCHEME_THEMES).map(({ key }) => key)])};
   const apply = () => {
-    let stored = null;
-    try { stored = localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)}); } catch {}
-    const preference = known.includes(stored) ? stored : ${JSON.stringify(SYSTEM_THEME)};
-    const theme = preference === ${JSON.stringify(SYSTEM_THEME)} ? (media.matches ? "light" : "default") : preference;
+    const read = (key, fallback) => {
+      let value = null;
+      try { value = localStorage.getItem(key); } catch {}
+      return value === fallback || known.includes(value) ? value : fallback;
+    };
+    const preference = read(${JSON.stringify(THEME_STORAGE_KEY)}, ${JSON.stringify(SYSTEM_THEME)});
+    const lightTheme = read(${JSON.stringify(SCHEME_THEMES.light.key)}, ${JSON.stringify(SCHEME_THEMES.light.fallback)});
+    const darkTheme = read(${JSON.stringify(SCHEME_THEMES.dark.key)}, ${JSON.stringify(SCHEME_THEMES.dark.fallback)});
+    const theme = preference === ${JSON.stringify(SYSTEM_THEME)} ? (media.matches ? lightTheme : darkTheme) : preference;
     const isLight = light.includes(theme);
     root.dataset.theme = theme;
     root.dataset.themePreference = preference;
+    root.dataset.themeLight = lightTheme;
+    root.dataset.themeDark = darkTheme;
     root.classList.toggle("dark", !isLight);
     root.style.colorScheme = isLight ? "light" : "dark";
   };
   apply();
   window.__takawebTheme = apply;
   media.addEventListener("change", apply);
-  addEventListener("storage", (event) => event.key === ${JSON.stringify(THEME_STORAGE_KEY)} && apply());
+  addEventListener("storage", (event) => keys.includes(event.key) && apply());
 })();`
