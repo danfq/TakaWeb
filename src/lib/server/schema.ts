@@ -94,6 +94,18 @@ const migrations: (string | ((database: DatabaseSync) => void))[] = [
     updated_at INTEGER NOT NULL
   );
   `,
+  // two-factor sign in, a totp secret once it is on and the last time step used, so no code works twice
+  `
+  ALTER TABLE user ADD COLUMN totp_secret TEXT;
+  ALTER TABLE user ADD COLUMN totp_step INTEGER NOT NULL DEFAULT 0;
+  `,
+  // keys the server makes for itself, such as the one sealing filters in urls
+  `
+  CREATE TABLE secret (
+    name TEXT PRIMARY KEY,
+    value BLOB NOT NULL
+  ) WITHOUT ROWID;
+  `,
 ]
 
 /**
