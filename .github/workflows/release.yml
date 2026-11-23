@@ -33,11 +33,12 @@ jobs:
             exit 1
           fi
 
-      # the annotated tag carries the notes nextver wrote, checkout may leave a lightweight copy
+      # the annotated tag carries the notes bun release wrote, checkout may leave a lightweight copy
+      # subject and body leave out the signature of signed tags
       - name: Read release notes from the tag
         run: |
           git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
-          git tag --list --format='%(contents:body)' "$GITHUB_REF_NAME" > RELEASE_NOTES.md
+          git tag --list --format='%(contents:subject)%0a%0a%(contents:body)' "$GITHUB_REF_NAME" > RELEASE_NOTES.md
 
       - name: Create GitHub release
         env:
@@ -46,7 +47,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
             --notes-file RELEASE_NOTES.md \
-            --generate-notes \
             --verify-tag
 
   image:

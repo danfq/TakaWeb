@@ -5,6 +5,7 @@ import { join } from "node:path"
 import { stdin, stdout } from "node:process"
 import { createInterface } from "node:readline/promises"
 import { release } from "@danfq/nextver"
+import { changes, renderNotes } from "./notes"
 
 /**
  * cuts a release from main: syncs with the remote, bumps the version with nextver,
@@ -147,7 +148,7 @@ async function cut() {
   const before = git("rev-parse", "HEAD")
 
   try {
-    // nextver works out the bump and notes, package.json is only written once confirmed
+    // nextver works out the bump, package.json is only written once confirmed
     const result = await release({ dryRun: true })
 
     if (result.skipped) {
@@ -159,13 +160,12 @@ async function cut() {
     const first = result.previous === null
     const version = first ? FIRST_VERSION : result.version
     const tag = `v${version}`
-    const body = result.notes.trim()
+    const notes = renderNotes(changes(result.previous))
 
     console.log(
       `\n${result.current} -> ${version} (${first ? "first release" : result.bump}, ${result.commits} commits)\n`
     )
-    console.log(body || "No features, fixes or other notable changes.")
-    console.log()
+    console.log(notes)
 
     if (!(await confirm(`Release ${tag}?`))) fail("cancelled, nothing was changed")
 
@@ -173,10 +173,11 @@ async function cut() {
 
     // the tag carries the notes, the release workflow publishes them from it
     const message = join(dir, "tag.md")
-    writeFileSync(message, `${tag}\n\n${body}\n`)
+    writeFileSync(message, notes)
 
     git("commit", "--quiet", "--message", `chore: release ${tag}`, "--", "package.json")
-    git("tag", "--annotate", tag, "--file", message)
+    // verbatim, or git takes the markdown headings for comments and strips them
+    git("tag", "--annotate", "--cleanup=verbatim", tag, "--file", message)
 
     try {
       // both or neither, a tag without its commit on main would release nothing
