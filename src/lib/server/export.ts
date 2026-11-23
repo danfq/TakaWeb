@@ -1,9 +1,10 @@
-import { createReadStream, createWriteStream, type WriteStream } from "node:fs"
+import { createReadStream, createWriteStream } from "node:fs"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { Readable } from "node:stream"
+import { pipeline } from "node:stream/promises"
 import { createGzip } from "node:zlib"
 import { tar, zip, type ArchiveFile } from "@/lib/server/archive"
 import { db } from "@/lib/server/db"
@@ -34,47 +35,33 @@ TakaTime logs live in your MongoDB, restore them from a MongoDB backup instead.
 `
 
 /**
- * write a chunk, waiting when the file falls behind
+ * every takatime log, one document per line, or null without a database
  *
- * @param out file stream
- * @param chunk text
- *
- * @returns {Promise<void>} resolves once accepted
+ * @returns {AsyncGenerator<string>} json text
  */
-function write(out: WriteStream, chunk: string): Promise<void> {
-  if (out.write(chunk)) return Promise.resolve()
+async function* logLines(): AsyncGenerator<string> {
+  if (!hasMongo()) {
+    yield "null"
+    return
+  }
 
-  return new Promise((resolve, reject) => {
-    out.once("drain", resolve)
-    out.once("error", reject)
-  })
-}
-
-/**
- * write every takatime log, one document per line, or null without a database
- *
- * @param out file stream
- */
-async function writeLogs(out: WriteStream) {
-  if (!hasMongo()) return write(out, "null")
-
-  await write(out, "[")
+  yield "["
   let first = true
 
   for await (const doc of logs().find({}, { sort: { _id: 1 } })) {
-    await write(out, `${first ? "\n" : ",\n"}${JSON.stringify(doc)}`)
+    yield `${first ? "\n" : ",\n"}${JSON.stringify(doc)}`
     first = false
   }
 
-  await write(out, first ? "]" : "\n]")
+  yield first ? "]" : "\n]"
 }
 
 /**
- * write every imported heartbeat grouped by source
+ * every imported heartbeat grouped by source
  *
- * @param out file stream
+ * @returns {Generator<string>} json text
  */
-async function writeImported(out: WriteStream) {
+function* importedLines(): Generator<string> {
   const rows = db
     .prepare(
       `SELECT source, time, file, project, language, branch, editor, os, boundary
@@ -82,54 +69,53 @@ async function writeImported(out: WriteStream) {
     )
     .iterate() as Iterable<Record<string, unknown> & { source: string; boundary: number }>
 
-  await write(out, "{")
+  yield "{"
   let source: string | null = null
 
   for (const { source: from, boundary, ...beat } of rows) {
     if (from !== source) {
-      await write(out, `${source === null ? "" : "\n],"}\n${JSON.stringify(from)}: [\n`)
+      yield `${source === null ? "" : "\n],"}\n${JSON.stringify(from)}: [\n`
       source = from
     } else {
-      await write(out, ",\n")
+      yield ",\n"
     }
 
-    await write(out, JSON.stringify({ ...beat, boundary: !!boundary }))
+    yield JSON.stringify({ ...beat, boundary: !!boundary })
   }
 
-  await write(out, source === null ? "}" : "\n]\n}")
+  yield source === null ? "}" : "\n]\n}"
 }
 
 /**
- * write the whole json export to a file, nothing large is ever held in memory
+ * the whole json export, piece by piece
+ *
+ * @param userId account to export settings of
+ * @param now export time
+ *
+ * @returns {AsyncGenerator<string>} json text
+ */
+async function* exportJson(userId: number, now: Date): AsyncGenerator<string> {
+  yield `{\n"takaweb": ${JSON.stringify({ version: EXPORT_VERSION, exportedAt: now.toISOString() })},\n`
+  yield `"settings": ${JSON.stringify(getSettings(userId))},\n`
+  yield `"logs": `
+  yield* logLines()
+  yield `,\n"imported": `
+  yield* importedLines()
+  yield "\n}\n"
+}
+
+/**
+ * write the json export to a file, nothing large is ever held in memory
+ * the pipeline waits whenever the file falls behind and fails cleanly when it errors
  *
  * @param path file path
  * @param userId account to export settings of
  * @param now export time
+ *
+ * @returns {Promise<void>} resolves once written
  */
-async function writeJson(path: string, userId: number, now: Date) {
-  const out = createWriteStream(path)
-  const closed = new Promise<void>((resolve, reject) => {
-    out.once("finish", resolve)
-    out.once("error", reject)
-  })
-
-  try {
-    await write(
-      out,
-      `{\n"takaweb": ${JSON.stringify({ version: EXPORT_VERSION, exportedAt: now.toISOString() })},\n`
-    )
-    await write(out, `"settings": ${JSON.stringify(getSettings(userId))},\n`)
-    await write(out, `"logs": `)
-    await writeLogs(out)
-    await write(out, `,\n"imported": `)
-    await writeImported(out)
-    await write(out, "\n}\n")
-  } finally {
-    out.end()
-  }
-
-  await closed
-}
+const writeJson = (path: string, userId: number, now: Date): Promise<void> =>
+  pipeline(Readable.from(exportJson(userId, now)), createWriteStream(path))
 
 /**
  * copy the database consistently, without sessions
