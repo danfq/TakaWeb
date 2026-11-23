@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs"
 import { join, resolve } from "node:path"
+import type { DatabaseSync } from "node:sqlite"
 import { parseArgs } from "node:util"
 import { PASSWORD_MAX, PASSWORD_MIN } from "@/lib/account"
 import { hashPassword } from "@/lib/server/auth/password"
@@ -7,13 +8,14 @@ import { openDatabase, transaction } from "@/lib/server/schema"
 
 /**
  * maintenance commands, run next to the server with the same TAKAWEB_DATA_DIR
- * the only way to recover a forgotten password, the web ui never offers one
+ * the only way to recover a forgotten password or a lost authenticator, the web ui never offers one
  */
 
 const USAGE = `Usage: takaweb <command> [options]
 
 Commands:
   reset-password   Set a new admin password and sign out every session
+  disable-2fa      Turn off two-factor authentication, for a lost authenticator
 
 Options:
   --stdin          Read the new password from the first line of stdin instead of prompting
@@ -125,11 +127,11 @@ async function newPassword(stdin: boolean): Promise<string> {
 }
 
 /**
- * set a new admin password and sign out every session
+ * open the server's database and find the admin
  *
- * @param stdin read the password from stdin
+ * @returns {{ database: DatabaseSync; admin: { id: number } }} database and admin
  */
-async function resetPassword(stdin: boolean) {
+function openAdmin(): { database: DatabaseSync; admin: { id: number } } {
   const file = join(resolve(process.env.TAKAWEB_DATA_DIR || "data"), "takaweb.db")
 
   if (!existsSync(file)) fail(`no database at ${file}, check TAKAWEB_DATA_DIR`)
@@ -139,6 +141,17 @@ async function resetPassword(stdin: boolean) {
     { id: number } | undefined
 
   if (!admin) fail("no admin account yet, finish the setup in the browser instead")
+
+  return { database, admin }
+}
+
+/**
+ * set a new admin password and sign out every session
+ *
+ * @param stdin read the password from stdin
+ */
+async function resetPassword(stdin: boolean) {
+  const { database, admin } = openAdmin()
 
   const password = await newPassword(stdin).catch(() => fail("cancelled"))
 
@@ -159,6 +172,25 @@ async function resetPassword(stdin: boolean) {
   console.log(`Password reset. ${sessions} session${sessions === 1 ? "" : "s"} signed out.`)
 }
 
+/**
+ * turn off two-factor authentication, sessions stay signed in
+ */
+function disableTwoFactor() {
+  const { database, admin } = openAdmin()
+
+  const { changes } = database
+    .prepare("UPDATE user SET totp_secret = NULL, totp_step = 0 WHERE id = ? AND totp_secret IS NOT NULL")
+    .run(admin.id)
+
+  database.close()
+
+  console.log(
+    changes
+      ? "Two-factor authentication is off. Sign in with your password and set it up again from Settings."
+      : "Two-factor authentication was already off."
+  )
+}
+
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
@@ -177,6 +209,9 @@ if (values.help || !command) {
 switch (command) {
   case "reset-password":
     await resetPassword(values.stdin)
+    break
+  case "disable-2fa":
+    disableTwoFactor()
     break
   default:
     fail(`unknown command ${command}, see takaweb --help`)

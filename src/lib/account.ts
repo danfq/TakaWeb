@@ -17,6 +17,8 @@ export type Account = {
   sessions: SessionInfo[]
   // heartbeats imported from wakatime
   imported: number
+  // whether signing in takes a code from an authenticator app
+  twoFactor: boolean
 }
 
 /**
@@ -24,6 +26,20 @@ export type Account = {
  */
 export const PASSWORD_MIN = 12
 export const PASSWORD_MAX = 128
+
+/**
+ * digits in an authenticator app code
+ */
+export const CODE_LENGTH = 6
+
+/**
+ * read a code as typed or pasted, e.g. 123 456
+ *
+ * @param input raw input
+ *
+ * @returns {string} digits only
+ */
+export const normalizeCode = (input: string): string => input.replace(/[\s-]/g, "")
 
 /**
  * browsers, most specific first since most also claim to be chrome or safari

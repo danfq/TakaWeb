@@ -1,6 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { actions } from "astro:actions"
-import { KeyRound, MonitorSmartphone, RotateCcw, Settings as SettingsIcon } from "lucide-react"
+import {
+  KeyRound,
+  MonitorSmartphone,
+  RotateCcw,
+  Settings as SettingsIcon,
+  ShieldCheck,
+  ShieldOff,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Field,
@@ -27,6 +34,7 @@ import DataExport from "@/components/settings/data-export"
 import PasswordDialog from "@/components/settings/password-dialog"
 import SessionsDialog from "@/components/settings/sessions-dialog"
 import { useSettings, useSettingsError, useSettingsStore } from "@/components/settings/settings-store"
+import TwoFactorDialog from "@/components/settings/two-factor-dialog"
 import WakatimeImport from "@/components/settings/wakatime-import"
 import type { Account, SessionInfo } from "@/lib/account"
 import { keyboardMode } from "@/lib/focus"
@@ -83,8 +91,8 @@ const SETTINGS_OPTIONS: {
   {
     id: "hideNames",
     section: "Dashboard",
-    title: "Hide names",
-    description: "Blur names for screen sharing.",
+    title: "Hide private details",
+    description: "Blur names and IP addresses, and keep them out of the URL.",
   },
 ]
 
@@ -160,20 +168,25 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /**
- * the account password and every signed in session
+ * the account password, two-factor authentication and every signed in session
  */
 function AccountSection({
   sessions,
   onSessions,
+  twoFactor,
+  onTwoFactor,
 }: {
   sessions: SessionInfo[]
   onSessions: (sessions: SessionInfo[]) => void
+  twoFactor: boolean
+  onTwoFactor: (enabled: boolean) => void
 }) {
   const [changing, setChanging] = useState(false)
+  const [securing, setSecuring] = useState(false)
   const [listing, setListing] = useState(false)
 
   /**
-   * show the sessions left after a password change signed the others out
+   * show the sessions left after a password change or two-factor signed the others out
    */
   const refresh = async () => {
     try {
@@ -196,6 +209,32 @@ function AccountSection({
         </Button>
 
         <PasswordDialog open={changing} onOpenChange={setChanging} onChanged={refresh} />
+      </Field>
+
+      <Field orientation="horizontal">
+        <FieldContent>
+          <FieldTitle>Two-factor authentication</FieldTitle>
+          <FieldDescription>
+            {twoFactor
+              ? "On, signing in takes a code from your app."
+              : "Ask for a code from an app when signing in."}
+          </FieldDescription>
+        </FieldContent>
+
+        <Button variant="secondary" size="sm" onClick={() => setSecuring(true)}>
+          {twoFactor ? <ShieldOff /> : <ShieldCheck />}
+          {twoFactor ? "Turn off" : "Set up"}
+        </Button>
+
+        <TwoFactorDialog
+          open={securing}
+          onOpenChange={setSecuring}
+          enabled={twoFactor}
+          onChanged={(enabled) => {
+            onTwoFactor(enabled)
+            refresh()
+          }}
+        />
       </Field>
 
       <Field orientation="horizontal">
@@ -228,6 +267,7 @@ function AccountSection({
 export default function SettingsSheet({ account }: { account: Account }) {
   const [open, setOpen] = useState(false)
   const [sessions, setSessions] = useState(account.sessions)
+  const [twoFactor, setTwoFactor] = useState(account.twoFactor)
   const settings = useSettings()
   const error = useSettingsError()
   const { reset } = useSettingsStore()
@@ -321,7 +361,12 @@ export default function SettingsSheet({ account }: { account: Account }) {
             </Section>
           ))}
 
-          <AccountSection sessions={sessions} onSessions={setSessions} />
+          <AccountSection
+            sessions={sessions}
+            onSessions={setSessions}
+            twoFactor={twoFactor}
+            onTwoFactor={setTwoFactor}
+          />
 
           <Section title="Data">
             <WakatimeImport imported={account.imported} />

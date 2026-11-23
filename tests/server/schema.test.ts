@@ -13,7 +13,7 @@ describe("schema", () => {
       .all()
       .map((row) => row.name)
 
-    expect(tables).toEqual(["imported_heartbeat", "session", "setting", "user"])
+    expect(tables).toEqual(["imported_heartbeat", "secret", "session", "setting", "user"])
     expect(database.prepare("PRAGMA user_version").get()).toEqual({ user_version: SCHEMA_VERSION })
   })
 

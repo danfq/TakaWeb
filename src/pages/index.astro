@@ -2,24 +2,24 @@
 import MainLayout from "@/layouts/main.astro"
 import Dashboard from "@/components/dashboard/dashboard"
 import { listSessions } from "@/lib/server/auth/session"
+import { hasTotp } from "@/lib/server/auth/two-factor"
 import { importedCount } from "@/lib/server/imports"
 import { preferredLocale } from "@/lib/server/locale"
+import { openFilter, sealFilter } from "@/lib/server/seal"
 import { getSettings } from "@/lib/server/settings"
 import { fixedRange } from "@/lib/settings"
 import { isTimeZone } from "@/lib/server/stats/days"
 import { initial } from "@/lib/server/stats/hub"
-import { DEFAULT_RANGE, RANGE_COOKIE, TZ_COOKIE, isRange, readFilter } from "@/lib/stats/view"
-
-// render with the browser's view, so hydration picks up exactly where the server left off
-const tz = Astro.cookies.get(TZ_COOKIE)?.value
-const range = Astro.cookies.get(RANGE_COOKIE)?.value
-
-const view = {
-  tz: tz && isTimeZone(tz) ? tz : "UTC",
-  filter: readFilter(Astro.url.searchParams),
-}
-
-const { snapshot, status } = await initial(view)
+import {
+  DEFAULT_RANGE,
+  RANGE_COOKIE,
+  SEALED_PARAM,
+  TZ_COOKIE,
+  hasPlainFilter,
+  isRange,
+  readFilter,
+  writeFilter,
+} from "@/lib/stats/view"
 
 // the middleware only lets signed in visitors through
 const user = Astro.locals.user!
@@ -27,10 +27,37 @@ const session = Astro.locals.session!
 
 const settings = getSettings(user.id)
 
+const params = Astro.url.searchParams
+const sealed = params.get(SEALED_PARAM)
+const filter = sealed !== null ? openFilter(sealed) : readFilter(params)
+
+// names never reach the address bar while hidden, so a plain filter is swapped for a sealed one
+// before anything renders, and back once names show again
+const rewrite = settings.hideNames ? hasPlainFilter(params) || (sealed !== null && !filter) : sealed !== null
+
+if (rewrite) {
+  const url = new URL(Astro.url)
+  writeFilter(url.searchParams, filter, settings.hideNames && filter ? sealFilter(filter) : undefined)
+
+  return Astro.redirect(`${url.pathname}${url.search}`)
+}
+
+// render with the browser's view, so hydration picks up exactly where the server left off
+const tz = Astro.cookies.get(TZ_COOKIE)?.value
+const range = Astro.cookies.get(RANGE_COOKIE)?.value
+
+const view = {
+  tz: tz && isTimeZone(tz) ? tz : "UTC",
+  filter,
+}
+
+const { snapshot, status } = await initial(view)
+
 // everything the settings sheet shows, so it opens without loading
 const account = {
   sessions: listSessions(user.id, session.id),
   imported: importedCount(),
+  twoFactor: hasTotp(user.id),
 }
 ---
 

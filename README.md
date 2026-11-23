@@ -9,7 +9,7 @@ TakaTime's editor plugins log your coding time to a MongoDB database you own. Ta
 - **Live**: new activity shows up the moment your editor logs it, no refreshing.
 - **Any range**: today, the last 7 or 30 days, the past year or all time, and details for any day or month.
 - **Filters**: narrow everything down to one project, language, editor or system.
-- **Private by default**: runs on your own server, behind your own password. TakaWeb only ever reads your TakaTime data.
+- **Private by default**: runs on your own server, behind your own password and optional two-factor authentication. TakaWeb only ever reads your TakaTime data.
 - **Settings that follow you**: preferences are saved to your account and sync across devices.
 - **Import from WakaTime**: bring your older coding history along.
 - **Backups**: download everything as JSON, ZIP or TAR.GZ.
@@ -51,7 +51,7 @@ Use `localhost` as the host on the same machine. To log from other machines, see
 
 ## Everyday use
 
-**Settings** open from the gear icon, or with <kbd>Cmd</kbd>+<kbd>,</kbd> (<kbd>Ctrl</kbd>+<kbd>,</kbd> on Windows and Linux). From there you can change how times are shown, hide project names for screen sharing, change your password, see and sign out your sessions, import from WakaTime and download a backup.
+**Settings** open from the gear icon, or with <kbd>Cmd</kbd>+<kbd>,</kbd> (<kbd>Ctrl</kbd>+<kbd>,</kbd> on Windows and Linux). From there you can change how times are shown, hide private details for screen sharing, change your password, turn on two-factor authentication, see and sign out your sessions, import from WakaTime and download a backup.
 
 **Forgot your password?** For safety it can only be reset on the server itself:
 
@@ -60,6 +60,12 @@ docker compose exec takaweb takaweb reset-password
 ```
 
 This signs out every session, so you sign in again with the new password.
+
+**Lost your authenticator app?** Turn two-factor authentication off on the server, then set it up again from Settings:
+
+```sh
+docker compose exec takaweb takaweb disable-2fa
+```
 
 **Updating** to the latest version:
 
