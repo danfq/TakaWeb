@@ -100,7 +100,6 @@ function EnableFlow({
 }) {
   const hidden = useNamesHidden()
 
-  const start = useActionForm(actions.twoFactor.start, (data) => onStep({ name: "scan", ...data }))
   const enable = useActionForm(
     actions.twoFactor.enable,
     (data) => onEnabled(data.revoked),
@@ -112,6 +111,11 @@ function EnableFlow({
       return false
     }
   )
+  const start = useActionForm(actions.twoFactor.start, (data) => {
+    // a timeout from the last setup no longer applies to the new secret
+    enable.clear()
+    onStep({ name: "scan", ...data })
+  })
 
   if (step.name === "password") {
     return (
