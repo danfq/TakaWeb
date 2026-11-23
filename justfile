@@ -100,3 +100,7 @@ check:
 # run the test suite
 test:
     bun run test
+
+# cut a release from main, see docs/guide.md
+release:
+    bun release

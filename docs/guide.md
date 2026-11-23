@@ -256,7 +256,7 @@ Tests run with Vitest against Astro's own Vite config. Each test file gets a fre
 Cut a release from a clean `main` with:
 
 ```sh
-bun release
+bun release   # or: just release
 ```
 
 It walks you through it:
