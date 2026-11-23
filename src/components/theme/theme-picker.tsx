@@ -70,18 +70,13 @@ function store(...entries: [string, string][]) {
 const choose = (mode: ThemeMode) => store([THEME_STORAGE_KEY, mode])
 
 /**
- * set the theme a scheme uses
- * switches to that scheme unless the os is being followed, so the pick is visible
+ * set the theme a scheme uses, and switch to system mode
  *
  * @param scheme color scheme
  * @param id theme id
- * @param preference current theme mode
  */
-const chooseFor = (scheme: Scheme, id: string, preference: string) =>
-  store(
-    [SCHEME_THEMES[scheme].key, id],
-    [THEME_STORAGE_KEY, preference === SYSTEM_THEME ? SYSTEM_THEME : scheme]
-  )
+const chooseFor = (scheme: Scheme, id: string) =>
+  store([SCHEME_THEMES[scheme].key, id], [THEME_STORAGE_KEY, SYSTEM_THEME])
 
 /**
  * find a theme's palette by id
@@ -113,7 +108,7 @@ function Swatch({ palette }: { palette: ThemePalette }) {
 /**
  * a scheme's mode option, with a button opening its theme list
  */
-function SchemeOption({ scheme, value, preference }: { scheme: Scheme; value: string; preference: string }) {
+function SchemeOption({ scheme, value }: { scheme: Scheme; value: string }) {
   const Icon = scheme === "light" ? Sun : Moon
   const name = scheme === "light" ? "Light" : "Dark"
 
@@ -134,9 +129,7 @@ function SchemeOption({ scheme, value, preference }: { scheme: Scheme; value: st
         </DropdownMenuSubTrigger>
 
         <DropdownMenuSubContent className="w-56">
-          <DropdownMenuRadioGroup
-            value={value}
-            onValueChange={(id: string) => chooseFor(scheme, id, preference)}>
+          <DropdownMenuRadioGroup value={value} onValueChange={(id: string) => chooseFor(scheme, id)}>
             <DropdownMenuGroup>
               <DropdownMenuLabel>{name} theme</DropdownMenuLabel>
               {THEMES.map((theme) => (
@@ -173,8 +166,8 @@ export default function ThemePicker() {
             <Monitor className="mx-0.5" />
             System
           </DropdownMenuRadioItem>
-          <SchemeOption scheme="light" value={light} preference={preference} />
-          <SchemeOption scheme="dark" value={dark} preference={preference} />
+          <SchemeOption scheme="light" value={light} />
+          <SchemeOption scheme="dark" value={dark} />
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
