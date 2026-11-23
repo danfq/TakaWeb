@@ -102,7 +102,7 @@ const MINUTE = 60_000
 const globals = globalThis as typeof globalThis & { __takawebLimits?: ReturnType<typeof create> }
 
 /**
- * every limiter takaweb uses, failures count wrong passwords and plain ones count requests
+ * every limiter takaweb uses, failures count wrong passwords or codes and plain ones count requests
  *
  * @returns limiters by name
  */
@@ -113,6 +113,8 @@ const create = () => ({
   authAttempts: new Limiter(30, 15 * MINUTE),
   // sign in attempts from everyone, caps hashing work under a distributed attack
   authGlobal: new Limiter(300, 15 * MINUTE),
+  // wrong authenticator codes per account, from anywhere, so spreading guesses over addresses does not help
+  codeFailures: new Limiter(10, 15 * MINUTE),
   // wrong current passwords per session when changing it
   passwordFailures: new Limiter(5, 15 * MINUTE),
   // wakatime api lookups per session, each one pages through an external api

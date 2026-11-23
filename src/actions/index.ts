@@ -1,6 +1,6 @@
 import { ActionError, defineAction, type ActionAPIContext } from "astro:actions"
 import { z } from "astro/zod"
-import { PASSWORD_MAX, PASSWORD_MIN } from "@/lib/account"
+import { CODE_LENGTH, PASSWORD_MAX, PASSWORD_MIN, normalizeCode } from "@/lib/account"
 import { createAdmin, getAdmin, hasAdmin, setPasswordHash, verifySetupToken } from "@/lib/server/auth/admin"
 import { hashPassword, verifyPassword } from "@/lib/server/auth/password"
 import {
@@ -14,6 +14,17 @@ import {
   type Session,
   type User,
 } from "@/lib/server/auth/session"
+import {
+  checkTotp,
+  disableTotp,
+  endChallenge,
+  failChallenge,
+  finishEnrollment,
+  hasTotp,
+  readChallenge,
+  startChallenge,
+  startEnrollment,
+} from "@/lib/server/auth/two-factor"
 import { clientIp, userAgent } from "@/lib/server/client"
 import { importedCount, removeImported } from "@/lib/server/imports"
 import { limits, type Limiter } from "@/lib/server/limiter"
@@ -29,6 +40,17 @@ const password = z
   .string()
   .min(PASSWORD_MIN, `Use at least ${PASSWORD_MIN} characters`)
   .max(PASSWORD_MAX, `Use at most ${PASSWORD_MAX} characters`)
+
+/**
+ * a code from an authenticator app, spaces and dashes are fine
+ */
+const code = z
+  .string()
+  .max(32)
+  .transform(normalizeCode)
+  .pipe(
+    z.string().regex(new RegExp(`^\\d{${CODE_LENGTH}}$`), `Enter the ${CODE_LENGTH}-digit code from your app`)
+  )
 
 /**
  * settings a change may carry, any subset of them
@@ -108,6 +130,50 @@ function assertCanAttempt(context: ActionAPIContext): string {
   assertNotLimited(limits.authGlobal, "all", true)
 
   return ip
+}
+
+/**
+ * reject a request unless it carries the admin's current password
+ *
+ * @param context action context
+ * @param user signed in user
+ * @param session session making the request
+ * @param password password to check
+ * @param message error shown when it is wrong
+ */
+async function assertPassword(
+  context: ActionAPIContext,
+  user: User,
+  session: Session,
+  password: string,
+  message = "Your password is incorrect"
+) {
+  const ip = clientIp(context)
+
+  assertNotLimited(limits.passwordFailures, session.id)
+  assertNotLimited(limits.authFailures, ip)
+
+  const admin = getAdmin()
+
+  if (!admin || admin.id !== user.id || !(await verifyPassword(password, admin.passwordHash))) {
+    limits.passwordFailures.hit(session.id)
+    limits.authFailures.hit(ip)
+
+    throw new ActionError({ code: "UNAUTHORIZED", message })
+  }
+
+  limits.passwordFailures.reset(session.id)
+}
+
+/**
+ * count a wrong code against the address and the account it was meant for
+ *
+ * @param context action context
+ * @param userId account the code was for
+ */
+function codeFailed(context: ActionAPIContext, userId: number) {
+  limits.authFailures.hit(clientIp(context))
+  limits.codeFailures.hit(String(userId))
 }
 
 /**
@@ -196,8 +262,17 @@ export const server = {
           })
         }
 
+        // the password alone is not enough, a code from the app finishes the sign in
+        if (hasTotp(admin.id)) {
+          startChallenge(context, admin.id)
+
+          return { twoFactor: true }
+        }
+
         limits.authFailures.reset(ip)
         signIn(context, admin.id, ip)
+
+        return { twoFactor: false }
       },
     }),
 
@@ -229,22 +304,8 @@ export const server = {
         }),
       handler: async (input, context) => {
         const { user, session } = assertUser(context)
-        const ip = clientIp(context)
 
-        assertNotLimited(limits.passwordFailures, session.id)
-        assertNotLimited(limits.authFailures, ip)
-
-        const admin = getAdmin()
-
-        if (!admin || admin.id !== user.id || !(await verifyPassword(input.current, admin.passwordHash))) {
-          limits.passwordFailures.hit(session.id)
-          limits.authFailures.hit(ip)
-
-          throw new ActionError({
-            code: "UNAUTHORIZED",
-            message: "Your current password is incorrect",
-          })
-        }
+        await assertPassword(context, user, session, input.current, "Your current password is incorrect")
 
         if (input.current === input.password) {
           throw new ActionError({
@@ -254,7 +315,6 @@ export const server = {
         }
 
         setPasswordHash(user.id, await hashPassword(input.password))
-        limits.passwordFailures.reset(session.id)
 
         const revoked = revokeOtherSessions(user.id, session.id)
         console.log("[takaweb] admin password changed")
@@ -305,6 +365,136 @@ export const server = {
         revokeOtherSessions(user.id, session.id)
 
         return listSessions(user.id, session.id)
+      },
+    }),
+  },
+
+  twoFactor: {
+    /**
+     * finish a sign in held by login with a code from the app
+     */
+    verify: defineAction({
+      accept: "form",
+      input: z.object({ code }),
+      handler: (input, context) => {
+        const ip = assertCanAttempt(context)
+        const challenge = readChallenge(context)
+
+        if (!challenge) {
+          endChallenge(context)
+
+          throw new ActionError({
+            code: "PRECONDITION_FAILED",
+            message: "Your sign in timed out, enter your password again",
+          })
+        }
+
+        assertNotLimited(limits.codeFailures, String(challenge.userId))
+
+        if (!checkTotp(challenge.userId, input.code)) {
+          codeFailed(context, challenge.userId)
+
+          if (!failChallenge(challenge.id)) {
+            endChallenge(context)
+
+            throw new ActionError({
+              code: "PRECONDITION_FAILED",
+              message: "Too many incorrect codes, enter your password again",
+            })
+          }
+
+          throw new ActionError({ code: "UNAUTHORIZED", message: "Incorrect code" })
+        }
+
+        endChallenge(context, challenge.id)
+        limits.authFailures.reset(ip)
+        signIn(context, challenge.userId, ip)
+      },
+    }),
+
+    /**
+     * make a secret to add to an authenticator app, after checking the password
+     */
+    start: defineAction({
+      accept: "form",
+      input: z.object({
+        password: z.string().min(1, "Enter your password").max(PASSWORD_MAX),
+      }),
+      handler: async (input, context) => {
+        const { user, session } = assertUser(context)
+
+        if (hasTotp(user.id)) {
+          throw new ActionError({ code: "CONFLICT", message: "Two-factor authentication is already on" })
+        }
+
+        await assertPassword(context, user, session, input.password)
+
+        return startEnrollment(session.id, user.id)
+      },
+    }),
+
+    /**
+     * turn two-factor on once a code proves the app has the secret, which signs out every other session
+     */
+    enable: defineAction({
+      accept: "form",
+      input: z.object({ code }),
+      handler: (input, context) => {
+        const { user, session } = assertUser(context)
+
+        assertNotLimited(limits.passwordFailures, session.id)
+        assertNotLimited(limits.authFailures, clientIp(context))
+
+        const outcome = finishEnrollment(session.id, user.id, input.code)
+
+        if (outcome === "expired") {
+          throw new ActionError({
+            code: "PRECONDITION_FAILED",
+            message: "Setup timed out, start over",
+          })
+        }
+
+        if (outcome === "invalid") {
+          limits.passwordFailures.hit(session.id)
+          limits.authFailures.hit(clientIp(context))
+
+          throw new ActionError({
+            code: "UNAUTHORIZED",
+            message: "Incorrect code, check the time on your device and try again",
+          })
+        }
+
+        const revoked = revokeOtherSessions(user.id, session.id)
+        console.log("[takaweb] two-factor authentication turned on")
+
+        return { revoked }
+      },
+    }),
+
+    /**
+     * turn two-factor off, with the password and a current code
+     */
+    disable: defineAction({
+      accept: "form",
+      input: z.object({
+        password: z.string().min(1, "Enter your password").max(PASSWORD_MAX),
+        code,
+      }),
+      handler: async (input, context) => {
+        const { user, session } = assertUser(context)
+
+        await assertPassword(context, user, session, input.password)
+        assertNotLimited(limits.codeFailures, String(user.id))
+
+        if (!checkTotp(user.id, input.code)) {
+          codeFailed(context, user.id)
+          limits.passwordFailures.hit(session.id)
+
+          throw new ActionError({ code: "UNAUTHORIZED", message: "Incorrect code" })
+        }
+
+        disableTotp(user.id)
+        console.log("[takaweb] two-factor authentication turned off")
       },
     }),
   },
