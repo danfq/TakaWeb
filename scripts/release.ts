@@ -15,6 +15,11 @@ const BRANCH = "main"
 const REMOTE = "origin"
 
 /**
+ * the version the very first release ships as
+ */
+const FIRST_VERSION = "1.0.0"
+
+/**
  * run git and return its output
  *
  * @param args git arguments
@@ -60,6 +65,17 @@ async function confirm(question: string): Promise<boolean> {
   const { value, done } = await answers.next()
 
   return !done && /^y(es)?$/i.test(String(value).trim())
+}
+
+/**
+ * set the version in package.json, formatted as prettier keeps it
+ *
+ * @param version new version
+ */
+function writeVersion(version: string) {
+  const manifest = JSON.parse(readFileSync("package.json", "utf8"))
+
+  writeFileSync("package.json", `${JSON.stringify({ ...manifest, version }, null, 2)}\n`)
 }
 
 /**
@@ -126,47 +142,51 @@ async function sync() {
  */
 async function cut() {
   const dir = mkdtempSync(join(tmpdir(), "takaweb-release-"))
-  const notes = join(dir, "notes.md")
   const before = git("rev-parse", "HEAD")
 
   try {
-    // writes the new version to package.json and the notes to a scratch file
-    const result = await release({ notes })
+    // nextver works out the bump and notes, package.json is only written once confirmed
+    const result = await release({ dryRun: true })
 
     if (result.skipped) {
       console.log(`\nNothing to release since ${result.previous ?? "the first commit"}.`)
       return
     }
 
-    const body = readFileSync(notes, "utf8").trim()
+    // the first release starts at 1.0.0, nextver bumps from there
+    const first = result.previous === null
+    const version = first ? FIRST_VERSION : result.version
+    const tag = `v${version}`
+    const body = result.notes.trim()
 
-    console.log(`\n${result.current} -> ${result.version} (${result.bump}, ${result.commits} commits)\n`)
+    console.log(
+      `\n${result.current} -> ${version} (${first ? "first release" : result.bump}, ${result.commits} commits)\n`
+    )
     console.log(body || "No features, fixes or other notable changes.")
     console.log()
 
-    if (!(await confirm(`Release ${result.tag}?`))) {
-      git("checkout", "--", "package.json")
-      fail("cancelled, package.json was left as it was")
-    }
+    if (!(await confirm(`Release ${tag}?`))) fail("cancelled, nothing was changed")
+
+    writeVersion(version)
 
     // the tag carries the notes, the release workflow publishes them from it
     const message = join(dir, "tag.md")
-    writeFileSync(message, `${result.tag}\n\n${body}\n`)
+    writeFileSync(message, `${tag}\n\n${body}\n`)
 
-    git("commit", "--quiet", "--message", `chore: release ${result.tag}`, "--", "package.json")
-    git("tag", "--annotate", result.tag, "--file", message)
+    git("commit", "--quiet", "--message", `chore: release ${tag}`, "--", "package.json")
+    git("tag", "--annotate", tag, "--file", message)
 
     try {
       // both or neither, a tag without its commit on main would release nothing
-      gitLoud("push", "--atomic", REMOTE, BRANCH, result.tag)
+      gitLoud("push", "--atomic", REMOTE, BRANCH, tag)
     } catch {
-      git("tag", "--delete", result.tag)
+      git("tag", "--delete", tag)
       git("reset", "--hard", before)
       fail("the push failed, the release commit and tag were undone locally")
     }
 
     const url = workflowUrl()
-    console.log(`\nPushed ${result.tag}. GitHub is building and publishing it${url ? `:\n${url}` : "."}`)
+    console.log(`\nPushed ${tag}. GitHub is building and publishing it${url ? `:\n${url}` : "."}`)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
