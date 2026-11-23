@@ -263,7 +263,7 @@ It walks you through it:
 
 1. Checks that your `main` matches GitHub's. It offers to pull when you are behind, to rebase when you have diverged, and pushes your own commits together with the release, so one push starts one workflow.
 2. Runs [`@danfq/nextver`](https://www.npmjs.com/package/@danfq/nextver), which picks the next version from the Conventional Commits since the last release and writes the release notes. The very first release is 1.0.0.
-3. Shows the new version and its notes, and asks before going on.
+3. Shows the new version and its notes, and offers to open the notes in your Git editor first, for example to fix a squashed pull request whose title is not a Conventional Commit. Then it asks before going on.
 4. Commits the version as `chore: release vX.Y.Z`, tags it with the notes, and pushes both together.
 
 The tag starts the **Release** workflow on GitHub. It checks the tag is on `main`, runs CI, publishes a GitHub release with the notes, and pushes a multi-arch image to `ghcr.io/danfq/takaweb`, tagged with the version and `latest`.
