@@ -10,12 +10,14 @@ type FieldErrors = Record<string, { message: string }[] | undefined>
  *
  * @param action form action to call
  * @param done path to go to on success, or a callback given the result and form
+ * @param failed called with errors that are not about a field, return true once handled
  *
  * @returns form state and submit handler
  */
 export function useActionForm<T>(
   action: FormAction<T>,
-  done: string | ((data: T, form: HTMLFormElement) => void)
+  done: string | ((data: T, form: HTMLFormElement) => void),
+  failed?: (error: ActionError) => boolean
 ) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -61,7 +63,7 @@ export function useActionForm<T>(
           ])
         )
       )
-    } else {
+    } else if (!failed?.(error)) {
       setError(error.message)
     }
   }

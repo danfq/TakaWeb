@@ -250,11 +250,6 @@ export const SCHEME_THEMES = {
 export type Scheme = keyof typeof SCHEME_THEMES
 
 /**
- * what the stored preference can be: follow the os, or force a scheme
- */
-export type ThemeMode = typeof SYSTEM_THEME | Scheme
-
-/**
  * css variables for every theme, keyed off data-theme on the root
  *
  * @returns {string} css
@@ -281,28 +276,15 @@ export const THEME_SCRIPT = `(() => {
   const root = document.documentElement;
   const keys = ${JSON.stringify([THEME_STORAGE_KEY, ...Object.values(SCHEME_THEMES).map(({ key }) => key)])};
   const apply = () => {
-    const get = (key) => {
-      try { return localStorage.getItem(key); } catch { return null; }
-    };
-    const set = (key, value) => {
-      try { localStorage.setItem(key, value); } catch {}
-    };
     const read = (key, fallback) => {
-      const value = get(key);
-      return known.includes(value) ? value : fallback;
+      let value = null;
+      try { value = localStorage.getItem(key); } catch {}
+      return value === fallback || known.includes(value) ? value : fallback;
     };
-    let preference = get(${JSON.stringify(THEME_STORAGE_KEY)});
-    if (!modes.includes(preference) && known.includes(preference)) {
-      const scheme = light.includes(preference) ? "light" : "dark";
-      set(schemes[scheme].key, preference);
-      set(${JSON.stringify(THEME_STORAGE_KEY)}, scheme);
-      preference = scheme;
-    }
-    if (!modes.includes(preference)) preference = ${JSON.stringify(SYSTEM_THEME)};
-    const lightTheme = read(schemes.light.key, schemes.light.fallback);
-    const darkTheme = read(schemes.dark.key, schemes.dark.fallback);
-    const scheme = preference === ${JSON.stringify(SYSTEM_THEME)} ? (media.matches ? "light" : "dark") : preference;
-    const theme = scheme === "light" ? lightTheme : darkTheme;
+    const preference = read(${JSON.stringify(THEME_STORAGE_KEY)}, ${JSON.stringify(SYSTEM_THEME)});
+    const lightTheme = read(${JSON.stringify(SCHEME_THEMES.light.key)}, ${JSON.stringify(SCHEME_THEMES.light.fallback)});
+    const darkTheme = read(${JSON.stringify(SCHEME_THEMES.dark.key)}, ${JSON.stringify(SCHEME_THEMES.dark.fallback)});
+    const theme = preference === ${JSON.stringify(SYSTEM_THEME)} ? (media.matches ? lightTheme : darkTheme) : preference;
     const isLight = light.includes(theme);
     root.dataset.theme = theme;
     root.dataset.themePreference = preference;

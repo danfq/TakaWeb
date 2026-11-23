@@ -22,7 +22,7 @@ export type Session = { id: string; userId: number; expiresAt: number }
  */
 export type SessionOrigin = { ip: string; userAgent: string }
 
-type CookieContext = { cookies: AstroCookies; url: URL }
+export type CookieContext = { cookies: AstroCookies; url: URL }
 
 /**
  * hash a session token, only hashes are stored
@@ -176,7 +176,7 @@ export function revokeOtherSessions(userId: number, keepId: string | null): numb
  *
  * @returns {boolean} whether cookies should be secure
  */
-const isSecure = (url: URL): boolean =>
+export const isSecure = (url: URL): boolean =>
   (TAKAWEB_URL ? new URL(TAKAWEB_URL).protocol : url.protocol) === "https:"
 
 /**

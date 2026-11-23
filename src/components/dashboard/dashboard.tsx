@@ -9,13 +9,14 @@ import Ranking, { rankColor } from "@/components/dashboard/ranking"
 import { SectionBody, TabbedSection } from "@/components/dashboard/section"
 import Sessions from "@/components/dashboard/sessions"
 import Summary from "@/components/dashboard/summary"
+import { useFilterUrl } from "@/components/dashboard/use-filter-url"
 import { useStream } from "@/components/dashboard/use-stream"
 import { SettingsProvider, useSettings, useSettingsStore } from "@/components/settings/settings-store"
 import type { Account } from "@/lib/account"
 import { hour12, type Settings } from "@/lib/settings"
 import { dayKey, duration } from "@/lib/stats/format"
 import type { Filter, PeriodRange, Range, Snapshot, Status } from "@/lib/stats/types"
-import { rememberRange, writeFilter } from "@/lib/stats/view"
+import { rememberRange } from "@/lib/stats/view"
 
 /**
  * a log this recent means the editor is still sending, takatime uploads every minute
@@ -315,19 +316,7 @@ function DashboardView(initial: DashboardProps) {
         : baseTitle.current
   }, [settings.tabTitle, snapshot, live, decimal])
 
-  /**
-   * switch filter and mirror it in the url
-   *
-   * @param next filter or null
-   */
-  const changeFilter = (next: Filter | null) => {
-    setFilter(next)
-
-    const url = new URL(location.href)
-    writeFilter(url.searchParams, next)
-
-    history.replaceState(history.state, "", url)
-  }
+  useFilterUrl(filter, settings.hideNames, initial.filter)
 
   let content: ReactNode
 
@@ -358,7 +347,7 @@ function DashboardView(initial: DashboardProps) {
               live={live}
               now={now}
               filter={filter}
-              onFilter={changeFilter}
+              onFilter={setFilter}
               selected={periods[0] ?? null}
               onOpen={(period) => setPeriods([period])}
             />
@@ -388,7 +377,7 @@ function DashboardView(initial: DashboardProps) {
           range={range}
           onRange={setRange}
           filter={filter}
-          onFilter={changeFilter}
+          onFilter={setFilter}
           account={initial.account}
         />
 

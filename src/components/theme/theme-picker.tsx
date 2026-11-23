@@ -8,6 +8,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -20,7 +21,6 @@ import {
   THEMES,
   type Palette as ThemePalette,
   type Scheme,
-  type ThemeMode,
 } from "@/lib/themes"
 
 declare global {
@@ -63,16 +63,16 @@ function store(...entries: [string, string][]) {
 }
 
 /**
- * force a scheme, or follow the os
+ * use a theme, or follow the os
  *
- * @param mode theme mode
+ * @param id theme id or system
  */
-const choose = (mode: ThemeMode) => store([THEME_STORAGE_KEY, mode])
+const choose = (id: string) => store([THEME_STORAGE_KEY, id])
 
 /**
- * set the theme a scheme uses, and switch to system mode
+ * set the theme system mode uses for a scheme, and switch to system mode
  *
- * @param scheme color scheme
+ * @param scheme os color scheme
  * @param id theme id
  */
 const chooseFor = (scheme: Scheme, id: string) =>
@@ -106,48 +106,49 @@ function Swatch({ palette }: { palette: ThemePalette }) {
 }
 
 /**
- * a scheme's mode option, with a button opening its theme list
+ * every theme as radio items
  */
-function SchemeOption({ scheme, value }: { scheme: Scheme; value: string }) {
+function ThemeItems() {
+  return THEMES.map((theme) => (
+    <DropdownMenuRadioItem key={theme.id} value={theme.id}>
+      <Swatch palette={theme.palette} />
+      {theme.name}
+    </DropdownMenuRadioItem>
+  ))
+}
+
+/**
+ * submenu picking the theme system mode uses for a scheme
+ */
+function SchemeMenu({ scheme, value }: { scheme: Scheme; value: string }) {
   const Icon = scheme === "light" ? Sun : Moon
-  const name = scheme === "light" ? "Light" : "Dark"
 
   return (
-    <div className="flex items-center gap-1">
-      <DropdownMenuRadioItem value={scheme} className="flex-1">
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className="gap-2.5">
         <Icon className="mx-0.5" />
-        {name}
-      </DropdownMenuRadioItem>
-
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger
-          openOnHover={false}
-          aria-label={`${name} theme`}
-          title={`${name} theme`}
-          className="gap-1 px-2">
+        {scheme === "light" ? "Light mode" : "Dark mode"}
+        <span className="ml-auto">
           <Swatch palette={paletteOf(value)} />
-        </DropdownMenuSubTrigger>
+        </span>
+      </DropdownMenuSubTrigger>
 
-        <DropdownMenuSubContent className="w-56">
-          <DropdownMenuRadioGroup value={value} onValueChange={(id: string) => chooseFor(scheme, id)}>
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>{name} theme</DropdownMenuLabel>
-              {THEMES.map((theme) => (
-                <DropdownMenuRadioItem key={theme.id} value={theme.id}>
-                  <Swatch palette={theme.palette} />
-                  {theme.name}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuGroup>
-          </DropdownMenuRadioGroup>
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
-    </div>
+      <DropdownMenuSubContent className="w-56">
+        <DropdownMenuRadioGroup value={value} onValueChange={(id: string) => chooseFor(scheme, id)}>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>
+              {scheme === "light" ? "When the system is light" : "When the system is dark"}
+            </DropdownMenuLabel>
+            <ThemeItems />
+          </DropdownMenuGroup>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   )
 }
 
 /**
- * follow the os or force a scheme, each scheme with its own theme
+ * pick one of takatime's themes, or follow the os with a theme for each scheme
  */
 export default function ThemePicker() {
   const preference = useSyncExternalStore(subscribe, getPreference, () => SYSTEM_THEME)
@@ -166,8 +167,18 @@ export default function ThemePicker() {
             <Monitor className="mx-0.5" />
             System
           </DropdownMenuRadioItem>
-          <SchemeOption scheme="light" value={light} />
-          <SchemeOption scheme="dark" value={dark} />
+        </DropdownMenuRadioGroup>
+
+        <SchemeMenu scheme="light" value={light} />
+        <SchemeMenu scheme="dark" value={dark} />
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuRadioGroup value={preference} onValueChange={choose}>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>TakaTime themes</DropdownMenuLabel>
+            <ThemeItems />
+          </DropdownMenuGroup>
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>

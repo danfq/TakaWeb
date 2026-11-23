@@ -20,7 +20,13 @@ vi.mock("astro:env/server", () => ({
 vi.resetModules()
 
 // state kept on globalThis outlives the modules, only the database handle is worth keeping
-for (const key of ["__takawebAdmin", "__takawebLimits", "__takawebSettings", "__takawebStreams"]) {
+for (const key of [
+  "__takawebAdmin",
+  "__takawebLimits",
+  "__takawebSettings",
+  "__takawebStreams",
+  "__takawebTwoFactor",
+]) {
   delete globals[key]
 }
 

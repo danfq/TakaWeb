@@ -120,6 +120,24 @@ printf '%s\n' "$NEW_PASSWORD" | docker compose exec -T takaweb takaweb reset-pas
 
 A reset signs out every session. It reads the database from `TAKAWEB_DATA_DIR`, so run it where the server runs.
 
+### Two-factor authentication
+
+**Settings → Account → Two-factor authentication → Set up** adds a second step to signing in: after your password, TakaWeb asks for a 6-digit code from an authenticator app, such as 1Password, Bitwarden, Google Authenticator or Aegis.
+
+1. Enter your password.
+2. Scan the QR code with your app, or type in the key shown below it.
+3. Enter the code the app shows to confirm it works.
+
+Every other session is signed out once it is on. Each code works only once, and codes from 30 seconds either side of now are accepted, to allow for clocks drifting apart. Turning it off takes your password and a current code.
+
+If you lose your authenticator app, turn two-factor authentication off on the server, then set it up again from Settings:
+
+```sh
+docker compose exec takaweb takaweb disable-2fa
+```
+
+This keeps every session signed in. When running from source, use `bun run takaweb disable-2fa`.
+
 ### Sessions
 
 Signing in keeps you signed in for 30 days, renewed as you use TakaWeb. **Settings → Account → Sessions → Manage** lists every browser that is signed in, with its address, browser and when it signed in. You can sign out any of them except the one you are using, or all others at once.
@@ -131,6 +149,7 @@ To slow down password guessing and keep the server responsive, TakaWeb limits ho
 | What                            | Limit                                         |
 | :------------------------------ | :-------------------------------------------- |
 | Wrong passwords or setup tokens | 10 per address per 15 minutes                 |
+| Wrong two-factor codes          | 10 per account per 15 minutes                 |
 | Sign in attempts                | 30 per address and 300 overall per 15 minutes |
 | Wrong current password          | 5 per session per 15 minutes                  |
 | WakaTime lookups                | 10 per session per minute                     |
@@ -140,7 +159,11 @@ To slow down password guessing and keep the server responsive, TakaWeb limits ho
 
 ## Settings
 
-Settings are stored with your account, so they follow you to every browser and device, and an open dashboard picks up changes made elsewhere right away. The page is rendered with them, so options like hidden names apply before anything shows.
+Settings are stored with your account, so they follow you to every browser and device, and an open dashboard picks up changes made elsewhere right away. The page is rendered with them, so options like hidden private details apply before anything shows.
+
+### Hiding private details
+
+**Hide private details** is meant for screen sharing. It blurs project names, branches, files and the addresses in the session list. Filters stay out of the address bar too: instead of `?project=TakaWeb`, the URL carries an encrypted `?filter=…` that only your server can read. Links with a plain filter are rewritten before the page shows, and switching the setting off brings the readable form back.
 
 The theme is the one exception: it stays with each browser, so every device can follow its own light or dark mode.
 
@@ -163,7 +186,7 @@ WakaTime is the only source for now. Other sources are planned, and the database
 - **JSON**: one file with your TakaTime logs, imported heartbeats and settings.
 - **ZIP** or **TAR.GZ**: the same JSON, plus a copy of TakaWeb's SQLite database and a short README.
 
-The database copy is consistent even while TakaWeb is running, and leaves sessions out.
+The database copy is consistent even while TakaWeb is running, and leaves sessions out. It does include your password hash and two-factor secret, so keep backups as private as the server itself.
 
 ### Restoring
 
@@ -176,6 +199,7 @@ Everyone signs in again afterwards. TakaTime logs live in MongoDB, so back them 
 ## Security
 
 - **Passwords** are hashed with scrypt, and the cost is stored with each hash so it can be raised later.
+- **Two-factor authentication** uses standard TOTP codes (RFC 6238). A sign in waiting for its code expires after 5 minutes or 5 wrong codes, and a code that was used once is never accepted again.
 - **Sessions** are random tokens in an `HttpOnly`, `SameSite=Lax` cookie, marked `Secure` when served over HTTPS. Only a hash of each token is stored.
 - **Cross-site requests** are refused: forms must come from TakaWeb's own pages, and the import endpoint only takes JSON.
 - **Content Security Policy**: every page allows only the scripts and styles TakaWeb itself ships, by hash, and may not be framed.
